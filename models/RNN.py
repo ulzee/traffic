@@ -56,9 +56,9 @@ class RNN(nn.Module):
 		outputs = torch.cat(outputs, dim=1)
 		return outputs, hidden
 
-	def params(self):
+	def params(self, lr=0.001):
 		criterion = nn.MSELoss().cuda()
-		opt = optim.SGD(self.parameters(), lr=0.001)
+		opt = optim.SGD(self.parameters(), lr=lr)
 		sch = optim.lr_scheduler.StepLR(opt, step_size=1, gamma=0.1)
 		return criterion, opt, sch
 
