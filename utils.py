@@ -73,6 +73,7 @@ def evaluate(dset, infer, crit, formt, device=None, result=False):
 		Xs, Ys = formt(Xs, Ys, gpu=device)
 
 		outputs = infer(Xs)
+
 		loss = crit(outputs, Ys)
 		eval_losses.append(loss.item())
 		sys.stdout.write('eval:%d/%d     \r' % (bii+1, dset.size()))
