@@ -5,6 +5,7 @@ import torch.optim as optim
 import numpy as np
 
 class Linear(nn.Module):
+
 	def __init__(self, forecast=5):
 		super(Linear, self).__init__()
 

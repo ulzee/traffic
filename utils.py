@@ -50,3 +50,5 @@ def show_travels(mat, recent=3):
 		plt.subplot(recent, 1, ii+1)
 		plt.plot(mat[-ii, :])
 	plt.show();plt.close()
+
+tonpy = lambda tens: tens.detach().cpu().numpy()

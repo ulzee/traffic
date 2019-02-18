@@ -4,50 +4,20 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 
-class RNN(nn.Module):
-	name = 'rnn'
-	def __init__(self, hidden_size=128, forecast=5, relu=False, deep=False):
-		super(RNN, self).__init__()
+class Conv(nn.Module):
+	def __init__(self, hidden_size=128, forecast=5, relu=False):
+		super(Conv, self).__init__()
 		self.relu = relu
 		self.lag = 5 # temporal dimension
 		self.steps = 10 # spatial dimension (optional ?)
 		self.hidden_size = hidden_size
-		self.forecast = forecast
 
-		if deep:
-			self.name += '_deep'
-			hsize = hidden_size
-			self.inp = nn.Sequential(
-				nn.Linear(self.lag, hsize),
-				nn.ReLU(),
-				nn.Linear(hsize, hsize),
-				nn.ReLU(),
-				nn.Linear(hsize, hsize),
-				# nn.ReLU(),
-			)
-			self.out = nn.Sequential(
-				# nn.ReLU(),
-				nn.Linear(hsize, hsize),
-				nn.ReLU(),
-				nn.Linear(hsize, hsize),
-				nn.ReLU(),
-				nn.Linear(hsize, 1),
-			)
-			self.fcast = nn.Sequential(
-				# nn.ReLU(),
-				nn.Linear(hsize, hsize),
-				nn.ReLU(),
-				nn.Linear(hsize, hsize),
-				nn.ReLU(),
-				nn.Linear(hsize, self.forecast),
-			)
-		else:
-			self.inp = nn.Linear(self.lag, hidden_size)
-			self.out = nn.Linear(hidden_size, 1)
-			self.fcast = nn.Linear(hidden_size, self.forecast)
-
+		self.inp = nn.Linear(self.lag, hidden_size)
 		self.rnn = nn.LSTM(hidden_size, hidden_size, 2, dropout=0.05)
+		self.out = nn.Linear(hidden_size, 1)
 
+		self.forecast = forecast
+		self.fcast = nn.Linear(hidden_size, self.forecast)
 
 	def step(self, input, hidden=None):
 		# seqlen = 1 for stepwise eval
