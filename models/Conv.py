@@ -29,7 +29,8 @@ class Conv(nn.Module):
 			nn.ReLU(),
 			nn.Linear(256, 256),
 			nn.ReLU(),
-			nn.Linear(256, self.steps),
+			# nn.Linear(256, self.steps),
+			nn.Linear(256, self.forecast),
 		)
 		# self.conv_s = nn.Sequential(
 		# 	nn.Conv1d(2, 64, 3, padding=1),
@@ -77,9 +78,9 @@ class Conv(nn.Module):
 			batch.append(torch.Tensor(mat[:, :, self.forecast+si]).to(gpu))
 
 		batch = list(reversed(batch))
-		# ys = ys[:, :5] # FIXME:
+		ys = ys[:, :5] # forecasting earlier
 		ys = np.flip(ys, axis=1).copy()
-		# sequence order is reversed, to infer traffic upstream
+		# sequence order is reversed, since rnn is unrolled upstream
 
 		ys = torch.from_numpy(ys).float().to(gpu)
 		return batch, ys

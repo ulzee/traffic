@@ -32,6 +32,7 @@ class RNN(nn.Module):
 			nn.Linear(hsize, hsize),
 			nn.ReLU(),
 			nn.Linear(hsize, 1),
+			# nn.Linear(hsize, self.lag),
 		)
 		self.fcast = nn.Sequential(
 			nn.ReLU(),
@@ -62,14 +63,18 @@ class RNN(nn.Module):
 
 	def forward(self, inputs, hidden=None):
 		steps = len(inputs)
+		lastKnown = steps - self.forecast - 1
 		outputs = []
 
 		for ii in range(steps - 1):
 			output, hidden = self.step(inputs[ii], hidden)
 
-			# last recurrent unit starts producing first forecast
-			if ii >= steps - self.forecast - 1:
+			# last recurrent step starts producing first forecast
+			if ii >= lastKnown:
 				outputs.append(output)
+				# past prediction is used as input
+				# if inputs[ii+1] is None:
+				# 	inputs[ii+1] = torch.zeros()
 
 		outputs = torch.cat(outputs, dim=1)
 		return outputs, hidden
@@ -84,23 +89,26 @@ class RNN(nn.Module):
 	# import torch.nn as nn
 	# import numpy as np
 
-	def format_batch(self, mat, ys, gpu):
+	def format_batch(self, mat, ys, gpu=None):
 		# raw   : batch x timelen x seqlen
 		# needed: seqlen x batch x timelen
 
 		steps = mat.shape[2] - self.forecast
 		# withold steps for forecasting
 
-		batch = []
+		seqX = []
+		for _ in range(self.forecast - 1):
+			# seqX.append(None)
+			seqX.append(torch.zeros(mat.shape[0], mat.shape[1]).to(gpu))
 		for si in range(steps):
-			batch.append(torch.Tensor(mat[:, :, self.forecast+si]).to(gpu))
-		for _ in range(self.forecast):
-			batch.append(torch.zeros(batch[0].size()).to(gpu))
+			seqX.append(torch.Tensor(mat[:, :, self.forecast+si]).to(gpu))
+		seqX = list(reversed(seqX))
 
-		batch = list(reversed(batch))
-		ys = ys[:, :5] # forecasting earlier
-		ys = np.flip(ys, axis=1).copy()
+		ys = ys[:, :5] # forecasting earlier stops
+		# yhist = mat[:, :, :5]
+		# ys = np.concatenate([np.expand_dims(ys, 1), yhist], axis=1)
+		ys = np.flip(ys, axis=-1).copy()
 		# sequence order is reversed, since rnn is unrolled upstream
 
 		ys = torch.from_numpy(ys).float().to(gpu)
-		return batch, ys
+		return seqX, ys
