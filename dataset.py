@@ -4,6 +4,7 @@ from glob import glob
 import os, sys
 import numpy as np
 from configs import *
+from utils import *
 import json
 from time import time
 from numpy.random import shuffle as npshuff
@@ -11,7 +12,9 @@ from numpy.random import shuffle as npshuff
 class Routes:
 	def __init__(self, mode, bsize, minValid=0.7,
 		index_file='metadata.json',
-		reserved='reserved_routes.json'):
+		reserved='reserved_routes.json',
+		overlap=True):
+
 		self.bsize = bsize
 		self.mode = mode
 
@@ -38,6 +41,9 @@ class Routes:
 			meta = [entry for entry in meta if entry['name'] not in res_names]
 		else:
 			meta = [entry for entry in meta if entry['name'] in res_names]
+			if not overlap:
+				for route in meta:
+					route['trainable'] = dedupe(route['trainable'])
 		assert len(meta)
 		print(' [*] Subset %s: %d (%s)' % (mode, len(meta), reserved))
 		self.meta = meta

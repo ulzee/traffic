@@ -54,12 +54,8 @@ class RNN(nn.Module):
 		# in: batch x inputsize
 		input = self.inp(input)
 		input = input.unsqueeze(0)
-		if self.relu:
-			input = nn.ReLU()(input)
 		# in: seqlen x batch x inputsize
 		output, hidden = self.rnn(input, hidden)
-		if self.relu:
-			output = nn.ReLU()(output)
 		# out: seqlen x batch x hiddensize
 		output = self.out(output.squeeze(0))
 		return output, hidden
@@ -80,13 +76,14 @@ class RNN(nn.Module):
 			# dims: forecast x batch size
 			outputs.append(output)
 
+		# outputs = list(reversed(outputs))
 		outputs = torch.cat(outputs, dim=1)
 		return outputs, hidden
 
 	def params(self, lr=0.001):
 		criterion = nn.MSELoss().cuda()
 		opt = optim.SGD(self.parameters(), lr=lr)
-		sch = optim.lr_scheduler.StepLR(opt, step_size=1, gamma=0.1)
+		sch = optim.lr_scheduler.StepLR(opt, step_size=2, gamma=0.5)
 		return criterion, opt, sch
 
 	# import torch
@@ -102,7 +99,7 @@ class RNN(nn.Module):
 
 		batch = []
 		for si in range(steps):
-			batch.append(torch.Tensor(mat[:, :, si]).cuda())
+			batch.append(torch.Tensor(mat[:, :, self.forecast+si]).cuda())
 
 		batch = list(reversed(batch))
 		# ys = ys[:, :5] # FIXME:

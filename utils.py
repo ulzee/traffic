@@ -52,3 +52,32 @@ def show_travels(mat, recent=3):
 	plt.show();plt.close()
 
 tonpy = lambda tens: tens.detach().cpu().numpy()
+
+def dedupe(segs):
+	covered = {}
+	unique = []
+	for ti, si in segs:
+#         print(ti, si)
+		tkey = '%d-%d' % (ti, si)
+		if tkey not in covered:
+			unique.append([ti, si])
+			for jj in range(5):
+				for ii in range(5):
+					covered['%d-%d' % (ti+jj, si+ii)] = True
+	return unique
+
+def evaluate(dset, infer, formt, device=None):
+	dset = []
+	for bii in range(dset.size()):
+		model.eval()
+
+		Xs, Ys = dset.next()
+		Xs, Ys = formt(Xs, Ys, gpu=device)
+
+		outputs = infer(Xs)
+		loss = criterion(outputs, Ys)
+		dset.append(loss.item())
+		sys.stdout.write('eval:%d/%d     \r' % (bii+1, dset.size()))
+	sys.stdout.flush()
+	print('Eval loss:', np.mean(dset))
+	return dset
