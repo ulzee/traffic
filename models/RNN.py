@@ -7,7 +7,7 @@ import numpy as np
 class RNN(nn.Module):
 	name = 'rnn_unroll'
 	# def __init__(self, hidden_size=128, forecast=5, relu=False, deep=False):
-	def __init__(self, hidden_size=256, forecast=5):
+	def __init__(self, hidden_size=256, forecast=5, deep=True):
 		super(RNN, self).__init__()
 		# self.relu = relu
 		self.lag = 5 # temporal dimension
@@ -15,33 +15,45 @@ class RNN(nn.Module):
 		self.hidden_size = hidden_size
 		self.forecast = forecast
 
-		# if deep:
 		hsize = hidden_size
-		self.inp = nn.Sequential(
-			nn.Linear(self.lag, hsize),
-			nn.ReLU(),
-			nn.Linear(hsize, hsize),
-			nn.ReLU(),
-			nn.Linear(hsize, hsize),
-			nn.ReLU(),
-		)
-		self.out = nn.Sequential(
-			nn.ReLU(),
-			nn.Linear(hsize, hsize),
-			nn.ReLU(),
-			nn.Linear(hsize, hsize),
-			nn.ReLU(),
-			nn.Linear(hsize, 1),
-			# nn.Linear(hsize, self.lag),
-		)
-		self.fcast = nn.Sequential(
-			nn.ReLU(),
-			nn.Linear(hsize, hsize),
-			nn.ReLU(),
-			nn.Linear(hsize, hsize),
-			nn.ReLU(),
-			nn.Linear(hsize, self.forecast),
-		)
+		if deep:
+			self.inp = nn.Sequential(
+				nn.Linear(self.lag, hsize),
+				nn.ReLU(),
+				nn.Linear(hsize, hsize),
+				nn.ReLU(),
+				nn.Linear(hsize, hsize),
+				nn.ReLU(),
+			)
+			self.out = nn.Sequential(
+				nn.ReLU(),
+				nn.Linear(hsize, hsize),
+				nn.ReLU(),
+				nn.Linear(hsize, hsize),
+				nn.ReLU(),
+				nn.Linear(hsize, 1),
+				# nn.Linear(hsize, self.lag),
+			)
+			self.fcast = nn.Sequential(
+				nn.ReLU(),
+				nn.Linear(hsize, hsize),
+				nn.ReLU(),
+				nn.Linear(hsize, hsize),
+				nn.ReLU(),
+				nn.Linear(hsize, self.forecast),
+			)
+		else:
+			self.name += '_short'
+			self.inp = nn.Sequential(
+				nn.Linear(self.lag, hsize),
+			)
+			self.out = nn.Sequential(
+				nn.Linear(hsize, 1),
+			)
+			self.fcast = nn.Sequential(
+				nn.Linear(hsize, self.forecast),
+			)
+
 		# else:
 		# 	self.inp = nn.Linear(self.lag, hidden_size)
 		# 	self.out = nn.Linear(hidden_size, 1)

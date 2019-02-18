@@ -15,7 +15,8 @@ class Linear(nn.Module):
 
 		self.op = nn.Linear(
 			self.lag * (self.steps - self.forecast),
-			self.lag + self.forecast)
+			self.forecast)
+			# self.lag + self.forecast)
 
 	def forward(self, inputs, hidden=None):
 		inputs = torch.cat(inputs, dim=1)
@@ -42,6 +43,7 @@ class Linear(nn.Module):
 			batch.append(torch.Tensor(mat[:, :, steps+si]).to(gpu))
 
 		batch = list(reversed(batch))
+		ys = ys[:, :5]
 		ys = np.flip(ys, axis=1).copy()
 		# sequence order is reversed, to infer traffic upstream
 
