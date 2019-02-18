@@ -7,7 +7,7 @@ import numpy as np
 class RNN(nn.Module):
 	name = 'rnn_unroll'
 	# def __init__(self, hidden_size=128, forecast=5, relu=False, deep=False):
-	def __init__(self, hidden_size=128, forecast=5):
+	def __init__(self, hidden_size=256, forecast=5):
 		super(RNN, self).__init__()
 		# self.relu = relu
 		self.lag = 5 # temporal dimension
@@ -48,13 +48,17 @@ class RNN(nn.Module):
 		# 	self.fcast = nn.Linear(hidden_size, self.forecast)
 
 		self.rnn = nn.LSTM(hidden_size, hidden_size, 2, dropout=0.05)
+		self.bsize = 32
 
 
 	def step(self, input, hidden=None):
 		# seqlen = 1 for stepwise eval
 		# in: batch x inputsize
-		input = self.inp(input)
-		input = input.unsqueeze(0)
+		if input is not None:
+			input = self.inp(input)
+			input = input.unsqueeze(0)
+		else:
+			input = torch.zeros(1, self.bsize, self.hidden_size).to(self.device)
 		# in: seqlen x batch x inputsize
 		output, hidden = self.rnn(input, hidden)
 		# out: seqlen x batch x hiddensize
@@ -98,8 +102,8 @@ class RNN(nn.Module):
 
 		seqX = []
 		for _ in range(self.forecast - 1):
-			# seqX.append(None)
-			seqX.append(torch.zeros(mat.shape[0], mat.shape[1]).to(gpu))
+			seqX.append(None)
+			# seqX.append(torch.zeros(mat.shape[0], mat.shape[1]).to(gpu))
 		for si in range(steps):
 			seqX.append(torch.Tensor(mat[:, :, self.forecast+si]).to(gpu))
 		seqX = list(reversed(seqX))

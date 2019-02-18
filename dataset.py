@@ -74,7 +74,7 @@ class Routes:
 
 		if progress:
 			self.ind += self.bsize
-			if self.ind >= len(self.refs):
+			if self.ind + self.bsize >= len(self.refs):
 				self.ind = 0
 				if self.mode == 'train':
 					npshuff(self.refs)
