@@ -2,9 +2,10 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import numpy as np
 
 class RNN(nn.Module):
-	def __init__(self, hidden_size=128, relu=False):
+	def __init__(self, hidden_size=128, forecast=5, relu=False):
 		super(RNN, self).__init__()
 		self.relu = relu
 		self.lag = 5 # temporal dimension
@@ -14,6 +15,9 @@ class RNN(nn.Module):
 		self.inp = nn.Linear(self.lag, hidden_size)
 		self.rnn = nn.LSTM(hidden_size, hidden_size, 2, dropout=0.05)
 		self.out = nn.Linear(hidden_size, 1)
+
+		self.forecast = forecast
+		self.fcast = nn.Linear(hidden_size, self.forecast)
 
 	def step(self, input, hidden=None):
 		# seqlen = 1 for stepwise eval
@@ -38,7 +42,18 @@ class RNN(nn.Module):
 			output, hidden = self.step(inputs[ii], hidden)
 			outputs.append(output)
 
-		outputs = torch.stack(outputs, dim=0)
+		# uses the hidden state to forecast further back
+		if self.forecast > 0:
+			h_f = hidden[0]
+			if self.relu:
+				h_f = nn.ReLU()(h_f)
+			h_f = h_f[-1] # last lstm layer vector
+			output = self.fcast(h_f)
+			# output = torch.t(output)
+			# dims: forecast x batch size
+			outputs.append(output)
+
+		outputs = torch.cat(outputs, dim=1)
 		return outputs, hidden
 
 	def params(self):
@@ -52,14 +67,19 @@ class RNN(nn.Module):
 	# import numpy as np
 
 	def format_batch(self, mat, ys):
-		# in: batch x timelen x seqlen
-		# out: seqlen x batch x timelen
-		# also - sequence order is reversed, to infer traffic upstream
-		steps = mat.shape[2]
+		# raw   : batch x timelen x seqlen
+		# needed: seqlen x batch x timelen
+
+		steps = mat.shape[2] - self.forecast
+		# withold steps for forecasting
+
 		batch = []
 		for si in range(steps):
 			batch.append(torch.Tensor(mat[:, :, si]).cuda())
-		batch = list(reversed(batch))
 
+		batch = list(reversed(batch))
 		ys = np.flip(ys, axis=1).copy()
-		return batch, torch.from_numpy(ys).float().cuda()
+		# sequence order is reversed, to infer traffic upstream
+
+		ys = torch.from_numpy(ys).float().cuda()
+		return batch, ys
