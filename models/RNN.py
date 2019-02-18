@@ -5,46 +5,46 @@ import torch.optim as optim
 import numpy as np
 
 class RNN(nn.Module):
-	name = 'rnn'
-	def __init__(self, hidden_size=128, forecast=5, relu=False, deep=False):
+	name = 'rnn_unroll'
+	# def __init__(self, hidden_size=128, forecast=5, relu=False, deep=False):
+	def __init__(self, hidden_size=128, forecast=5):
 		super(RNN, self).__init__()
-		self.relu = relu
+		# self.relu = relu
 		self.lag = 5 # temporal dimension
 		self.steps = 10 # spatial dimension (optional ?)
 		self.hidden_size = hidden_size
 		self.forecast = forecast
 
-		if deep:
-			self.name += '_deep'
-			hsize = hidden_size
-			self.inp = nn.Sequential(
-				nn.Linear(self.lag, hsize),
-				nn.ReLU(),
-				nn.Linear(hsize, hsize),
-				nn.ReLU(),
-				nn.Linear(hsize, hsize),
-				nn.ReLU(),
-			)
-			self.out = nn.Sequential(
-				nn.ReLU(),
-				nn.Linear(hsize, hsize),
-				nn.ReLU(),
-				nn.Linear(hsize, hsize),
-				nn.ReLU(),
-				nn.Linear(hsize, 1),
-			)
-			self.fcast = nn.Sequential(
-				nn.ReLU(),
-				nn.Linear(hsize, hsize),
-				nn.ReLU(),
-				nn.Linear(hsize, hsize),
-				nn.ReLU(),
-				nn.Linear(hsize, self.forecast),
-			)
-		else:
-			self.inp = nn.Linear(self.lag, hidden_size)
-			self.out = nn.Linear(hidden_size, 1)
-			self.fcast = nn.Linear(hidden_size, self.forecast)
+		# if deep:
+		hsize = hidden_size
+		self.inp = nn.Sequential(
+			nn.Linear(self.lag, hsize),
+			nn.ReLU(),
+			nn.Linear(hsize, hsize),
+			nn.ReLU(),
+			nn.Linear(hsize, hsize),
+			nn.ReLU(),
+		)
+		self.out = nn.Sequential(
+			nn.ReLU(),
+			nn.Linear(hsize, hsize),
+			nn.ReLU(),
+			nn.Linear(hsize, hsize),
+			nn.ReLU(),
+			nn.Linear(hsize, 1),
+		)
+		self.fcast = nn.Sequential(
+			nn.ReLU(),
+			nn.Linear(hsize, hsize),
+			nn.ReLU(),
+			nn.Linear(hsize, hsize),
+			nn.ReLU(),
+			nn.Linear(hsize, self.forecast),
+		)
+		# else:
+		# 	self.inp = nn.Linear(self.lag, hidden_size)
+		# 	self.out = nn.Linear(hidden_size, 1)
+		# 	self.fcast = nn.Linear(hidden_size, self.forecast)
 
 		self.rnn = nn.LSTM(hidden_size, hidden_size, 2, dropout=0.05)
 
@@ -64,19 +64,13 @@ class RNN(nn.Module):
 		steps = len(inputs)
 		outputs = []
 
-		for ii in range(steps):
+		for ii in range(steps - 1):
 			output, hidden = self.step(inputs[ii], hidden)
-			outputs.append(output)
 
-		# uses the final hidden state to forecast further back
-		if self.forecast > 0:
-			h_f = hidden[0] # hvector, hparams
-			h_f = h_f[-1]   # last lstm layer vector
-			output = self.fcast(h_f)
-			# dims: forecast x batch size
-			outputs.append(output)
+			# last recurrent unit starts producing first forecast
+			if ii >= steps - self.forecast - 1:
+				outputs.append(output)
 
-		# outputs = list(reversed(outputs))
 		outputs = torch.cat(outputs, dim=1)
 		return outputs, hidden
 
@@ -90,7 +84,7 @@ class RNN(nn.Module):
 	# import torch.nn as nn
 	# import numpy as np
 
-	def format_batch(self, mat, ys):
+	def format_batch(self, mat, ys, gpu):
 		# raw   : batch x timelen x seqlen
 		# needed: seqlen x batch x timelen
 
@@ -99,12 +93,14 @@ class RNN(nn.Module):
 
 		batch = []
 		for si in range(steps):
-			batch.append(torch.Tensor(mat[:, :, self.forecast+si]).cuda())
+			batch.append(torch.Tensor(mat[:, :, self.forecast+si]).to(gpu))
+		for _ in range(self.forecast):
+			batch.append(torch.zeros(batch[0].size()).to(gpu))
 
 		batch = list(reversed(batch))
-		# ys = ys[:, :5] # FIXME:
+		ys = ys[:, :5] # forecasting earlier
 		ys = np.flip(ys, axis=1).copy()
-		# sequence order is reversed, to infer traffic upstream
+		# sequence order is reversed, since rnn is unrolled upstream
 
-		ys = torch.from_numpy(ys).float().cuda()
+		ys = torch.from_numpy(ys).float().to(gpu)
 		return batch, ys

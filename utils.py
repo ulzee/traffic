@@ -66,18 +66,17 @@ def dedupe(segs):
 					covered['%d-%d' % (ti+jj, si+ii)] = True
 	return unique
 
-def evaluate(dset, infer, formt, device=None):
-	dset = []
+def evaluate(dset, infer, crit, formt, device=None, result=False):
+	eval_losses = []
 	for bii in range(dset.size()):
-		model.eval()
-
 		Xs, Ys = dset.next()
 		Xs, Ys = formt(Xs, Ys, gpu=device)
 
 		outputs = infer(Xs)
-		loss = criterion(outputs, Ys)
-		dset.append(loss.item())
+		loss = crit(outputs, Ys)
+		eval_losses.append(loss.item())
 		sys.stdout.write('eval:%d/%d     \r' % (bii+1, dset.size()))
 	sys.stdout.flush()
-	print('Eval loss:', np.mean(dset))
-	return dset
+	print('Eval loss:', np.mean(eval_losses))
+	if result:
+		return eval_losses
