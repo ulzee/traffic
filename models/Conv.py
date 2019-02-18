@@ -5,56 +5,59 @@ import torch.optim as optim
 import numpy as np
 
 class Conv(nn.Module):
-	def __init__(self, hidden_size=128, forecast=5, relu=False):
+	name = 'conv'
+	def __init__(self, forecast=5, relu=False, deep=False):
 		super(Conv, self).__init__()
-		self.relu = relu
-		self.lag = 5 # temporal dimension
+		self.lag = 5    # temporal dimension
 		self.steps = 10 # spatial dimension (optional ?)
-		self.hidden_size = hidden_size
-
-		self.inp = nn.Linear(self.lag, hidden_size)
-		self.rnn = nn.LSTM(hidden_size, hidden_size, 2, dropout=0.05)
-		self.out = nn.Linear(hidden_size, 1)
-
 		self.forecast = forecast
-		self.fcast = nn.Linear(hidden_size, self.forecast)
 
-	def step(self, input, hidden=None):
-		# seqlen = 1 for stepwise eval
-		# in: batch x inputsize
-		input = self.inp(input)
-		input = input.unsqueeze(0)
-		if self.relu:
-			input = nn.ReLU()(input)
-		# in: seqlen x batch x inputsize
-		output, hidden = self.rnn(input, hidden)
-		if self.relu:
-			output = nn.ReLU()(output)
-		# out: seqlen x batch x hiddensize
-		output = self.out(output.squeeze(0))
-		return output, hidden
+		self.conv_t = nn.Sequential(
+			nn.Conv1d(1, 64, 3, padding=1),
+			nn.ReLU(),
+			nn.Conv1d(64, 128, 3, padding=1),
+			nn.MaxPool1d(2),
+			nn.ReLU(),
+
+			nn.Conv1d(128, 128, 3, padding=1),
+			nn.ReLU(),
+			nn.Conv1d(128, 128, 3, padding=1),
+			nn.ReLU(),
+		)
+		self.dense = nn.Sequential(
+			nn.Linear(128 * 2 * 5, 256),
+			nn.ReLU(),
+			nn.Linear(256, 256),
+			nn.ReLU(),
+			nn.Linear(256, self.steps),
+		)
+		# self.conv_s = nn.Sequential(
+		# 	nn.Conv1d(2, 64, 3, padding=1),
+		# 	nn.ReLU(),
+		# 	nn.Conv1d(64, 128, 3, padding=1),
+		# 	nn.MaxPool1d(2),
+		# 	nn.ReLU(),
+
+		# 	nn.Conv1d(128, 256, 3, padding=1),
+		# 	nn.ReLU(),
+		# 	nn.Conv1d(256, 256, 3, padding=1),
+		# 	nn.MaxPool1d(2),
+		# 	nn.ReLU(),
+		# )
 
 	def forward(self, inputs, hidden=None):
 		steps = len(inputs)
-		outputs = []
 
+		t_out = []
 		for ii in range(steps):
-			output, hidden = self.step(inputs[ii], hidden)
-			outputs.append(output)
+			out = self.conv_t(inputs[ii].unsqueeze(1))
+			t_out.append(out.view(-1, 128 * 2))
 
-		# uses the hidden state to forecast further back
-		if self.forecast > 0:
-			h_f = hidden[0]
-			if self.relu:
-				h_f = nn.ReLU()(h_f)
-			h_f = h_f[-1] # last lstm layer vector
-			output = self.fcast(h_f)
-			# output = torch.t(output)
-			# dims: forecast x batch size
-			outputs.append(output)
+		t_out = torch.stack(t_out, 2).view(-1, 2 * 5 * 128)
 
-		outputs = torch.cat(outputs, dim=1)
-		return outputs, hidden
+		s_out = self.dense(t_out)
+
+		return s_out
 
 	def params(self, lr=0.001):
 		criterion = nn.MSELoss().cuda()
@@ -62,11 +65,7 @@ class Conv(nn.Module):
 		sch = optim.lr_scheduler.StepLR(opt, step_size=1, gamma=0.1)
 		return criterion, opt, sch
 
-	# import torch
-	# import torch.nn as nn
-	# import numpy as np
-
-	def format_batch(self, mat, ys):
+	def format_batch(self, mat, ys, gpu=None):
 		# raw   : batch x timelen x seqlen
 		# needed: seqlen x batch x timelen
 
@@ -75,11 +74,26 @@ class Conv(nn.Module):
 
 		batch = []
 		for si in range(steps):
-			batch.append(torch.Tensor(mat[:, :, si]).cuda())
+			batch.append(torch.Tensor(mat[:, :, si]).to(gpu))
 
 		batch = list(reversed(batch))
+		# ys = ys[:, :5] # FIXME:
 		ys = np.flip(ys, axis=1).copy()
 		# sequence order is reversed, to infer traffic upstream
 
-		ys = torch.from_numpy(ys).float().cuda()
+		ys = torch.from_numpy(ys).float().to(gpu)
 		return batch, ys
+
+if __name__ == '__main__':
+	import os, sys
+	sys.path.append('.')
+	from dataset import Routes
+
+	dset = Routes('train', 32, index_file='min-data.json')
+	Xs, Ys = dset.next()
+
+	model = Conv()
+	Xs, Ys = model.format_batch(Xs, Ys)
+	out = model(Xs)
+	print(out.size())
+	# model()

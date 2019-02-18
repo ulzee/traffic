@@ -23,10 +23,10 @@ class RNN(nn.Module):
 				nn.Linear(hsize, hsize),
 				nn.ReLU(),
 				nn.Linear(hsize, hsize),
-				# nn.ReLU(),
+				nn.ReLU(),
 			)
 			self.out = nn.Sequential(
-				# nn.ReLU(),
+				nn.ReLU(),
 				nn.Linear(hsize, hsize),
 				nn.ReLU(),
 				nn.Linear(hsize, hsize),
@@ -34,7 +34,7 @@ class RNN(nn.Module):
 				nn.Linear(hsize, 1),
 			)
 			self.fcast = nn.Sequential(
-				# nn.ReLU(),
+				nn.ReLU(),
 				nn.Linear(hsize, hsize),
 				nn.ReLU(),
 				nn.Linear(hsize, hsize),
@@ -72,14 +72,11 @@ class RNN(nn.Module):
 			output, hidden = self.step(inputs[ii], hidden)
 			outputs.append(output)
 
-		# uses the hidden state to forecast further back
+		# uses the final hidden state to forecast further back
 		if self.forecast > 0:
-			h_f = hidden[0]
-			if self.relu:
-				h_f = nn.ReLU()(h_f)
-			h_f = h_f[-1] # last lstm layer vector
+			h_f = hidden[0] # hvector, hparams
+			h_f = h_f[-1]   # last lstm layer vector
 			output = self.fcast(h_f)
-			# output = torch.t(output)
 			# dims: forecast x batch size
 			outputs.append(output)
 
@@ -108,6 +105,7 @@ class RNN(nn.Module):
 			batch.append(torch.Tensor(mat[:, :, si]).cuda())
 
 		batch = list(reversed(batch))
+		# ys = ys[:, :5] # FIXME:
 		ys = np.flip(ys, axis=1).copy()
 		# sequence order is reversed, to infer traffic upstream
 
