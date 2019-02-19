@@ -7,10 +7,10 @@ import numpy as np
 class RNN(nn.Module):
 	name = 'rnn_unroll'
 	# def __init__(self, hidden_size=128, forecast=5, relu=False, deep=False):
-	def __init__(self, hidden_size=256, forecast=5, deep=True):
+	def __init__(self, hidden_size=256, forecast=5, deep=True, lag=6):
 		super(RNN, self).__init__()
 		# self.relu = relu
-		self.lag = 6 # temporal dimension
+		self.lag = lag # temporal dimension
 		# self.lag = 5 # temporal dimension
 		self.steps = 10 # spatial dimension (optional ?)
 		self.hidden_size = hidden_size
@@ -63,7 +63,7 @@ class RNN(nn.Module):
 		output = self.out(output.squeeze(0))
 		return output, hidden
 
-	def forward(self, inputs, hidden=None):
+	def forward(self, inputs, hidden=None, dump=False):
 		steps = len(inputs)
 		# lastKnown = steps - self.forecast - 1
 		outputs = []
@@ -74,12 +74,15 @@ class RNN(nn.Module):
 
 		outputs = torch.stack(outputs, dim=0)
 		# return outputs, hidden
-		return outputs
+		if dump:
+			return outputs, hidden
+		else:
+			return outputs
 
 	def params(self, lr=0.001):
 		criterion = nn.MSELoss().cuda()
 		opt = optim.SGD(self.parameters(), lr=lr)
-		sch = optim.lr_scheduler.StepLR(opt, step_size=60, gamma=0.5)
+		sch = optim.lr_scheduler.StepLR(opt, step_size=30, gamma=0.5)
 		return criterion, opt, sch
 
 	def format_batch(self, data, wrap=True, normalize=1):

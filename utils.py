@@ -76,7 +76,7 @@ def evaluate(dset, model, crit, norm=1, result=False):
 
 		loss = crit(outputs, Ys)
 		eval_losses.append(loss.item())
-		sys.stdout.write('eval:%d/%d     \r' % (bii+1, len(dset)))
+		sys.stdout.write('eval:%d/%d L%.2f    \r' % (bii+1, len(dset), loss.item()))
 	sys.stdout.flush()
 	print('Eval loss:', norm * np.mean(eval_losses))
 	if result:

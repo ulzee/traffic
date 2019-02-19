@@ -13,6 +13,7 @@ from scipy.ndimage import gaussian_filter as blur
 
 class Routes(data.Dataset):
 	def __init__(self, mode, bsize, minValid=0.7,
+		lag=6,
 		index_file='min-data.json',
 		reserved='reserved_routes.json',
 		overlap=True,
@@ -23,6 +24,7 @@ class Routes(data.Dataset):
 		self.bsize = bsize
 		self.mode = mode
 		self.smooth = smooth
+		self.lag = lag
 
 		t0 = time()
 		with open(index_file) as fl:
@@ -70,7 +72,13 @@ class Routes(data.Dataset):
 
 		# for rname, ti, si in refs:
 		mat = np.load('data/history/%s.npy' % (rname))
-		hist = mat[ti-6:ti, si-10:si]
+		hist = mat[ti-self.lag:ti, si-10:si]
+		try:
+			assert np.count_nonzero(np.isnan(hist)) == 0
+		except:
+			print(hist)
+			raise Exception('Nan found...')
+
 			# batch.append(hist)
 		# Xs = np.transpose(hist[:, 1:], (1, 0))
 		# Ys = np.transpose(hist[:, :9], (1, 0)) # predict 1 stop back
@@ -114,8 +122,10 @@ class LocalRoute(Routes):
 	def __init__(self,
 		local,
 		mode, bsize,
+		lag=6,
 		local_split=0.8, # 0.2 recent will be used for testing
-		index_file='min-data.json',
+		meta_path='metadata/2h',
+		# index_file='min-data.json',
 		smooth=False,
 		device=None):
 
@@ -123,14 +133,11 @@ class LocalRoute(Routes):
 		self.bsize = bsize
 		self.mode = mode
 		self.smooth = smooth
+		self.lag = lag
 
 		t0 = time()
-		with open(index_file) as fl:
-			meta = json.load(fl)
-
-		single_meta = list(filter(lambda ent: ent['name'] == local, meta))
-		assert len(single_meta)
-		meta = single_meta
+		with open('%s/%s.json' % (meta_path, local)) as fl:
+			meta = [json.load(fl)]
 		self.meta = meta
 
 		print('Locals dataset: %s' % mode)
@@ -153,13 +160,22 @@ class LocalRoute(Routes):
 		if mode == 'train':
 			npshuff(self.refs)
 		self.ind = 0
+		self.mat = np.load('data/history/%s.npy' % (local))
+
+	def __getitem__(self, index):
+		ref = self.refs[index]
+		rname, ti, si = ref
+		hist = self.mat[ti-self.lag:ti, si-10:si]
+		if self.smooth:
+			hist = hist_smooth(hist)
+		return hist
 
 class SingleStop(Routes):
 	def __init__(self,
 		local, stop,
 		mode, bsize,
 		local_split=0.8, # 0.2 recent will be used for testing
-		index_file='min-data.json',
+		# index_file='min-data.json',
 		smooth=False,
 		device=None):
 
