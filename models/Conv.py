@@ -3,14 +3,14 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
+import os, sys
+sys.path.append('models')
+from models.RNN import RNN
 
-class Conv(nn.Module):
+class Conv(RNN):
 	name = 'conv'
-	def __init__(self, forecast=5, relu=False, deep=False):
-		super(Conv, self).__init__()
-		self.lag = 5    # temporal dimension
-		self.steps = 10 # spatial dimension (optional ?)
-		self.forecast = forecast
+	def __init__(self, hidden_size=256, forecast=5):
+		super(Conv, self).__init__(hidden_size=256, forecast=5, deep=True)
 
 		self.conv_t = nn.Sequential(
 			nn.Conv1d(1, 64, 3, padding=1),
@@ -24,77 +24,35 @@ class Conv(nn.Module):
 			nn.Conv1d(128, 128, 3, padding=1),
 			nn.ReLU(),
 		)
-		self.dense = nn.Sequential(
-			nn.Linear(128 * 2 * 5, 256),
-			nn.ReLU(),
-			nn.Linear(256, 256),
-			nn.ReLU(),
-			# nn.Linear(256, self.steps),
-			nn.Linear(256, self.forecast),
-		)
-		# self.conv_s = nn.Sequential(
-		# 	nn.Conv1d(2, 64, 3, padding=1),
-		# 	nn.ReLU(),
-		# 	nn.Conv1d(64, 128, 3, padding=1),
-		# 	nn.MaxPool1d(2),
-		# 	nn.ReLU(),
 
-		# 	nn.Conv1d(128, 256, 3, padding=1),
-		# 	nn.ReLU(),
-		# 	nn.Conv1d(256, 256, 3, padding=1),
-		# 	nn.MaxPool1d(2),
-		# 	nn.ReLU(),
-		# )
+		self.rnn = nn.LSTM(3 * 128, hidden_size, 2, dropout=0.05)
+		self.bsize = 32
+
+	def step(self, input, hidden=None):
+		# seqlen = 1 for stepwise eval
+		# in: batch x inputsize
+		tconv = self.conv_t(input.unsqueeze(1))
+		tconv = tconv.view(tconv.size()[0], -1)
+		# input = self.inp(input)
+		tconv = tconv.unsqueeze(0)
+		# print(tconv.size())
+		# assert False
+		# in: seqlen x batch x inputsize
+		output, hidden = self.rnn(tconv, hidden)
+		# out: seqlen x batch x hiddensize
+
+		output = self.out(output.squeeze(0))
+		return output, hidden
 
 	def forward(self, inputs, hidden=None):
 		steps = len(inputs)
+		# lastKnown = steps - self.forecast - 1
+		outputs = []
 
-		t_out = []
 		for ii in range(steps):
-			out = self.conv_t(inputs[ii].unsqueeze(1))
-			t_out.append(out.view(-1, 128 * 2))
+			output, hidden = self.step(inputs[ii], hidden)
+			outputs.append(output)
 
-		t_out = torch.stack(t_out, 2).view(-1, 2 * 5 * 128)
-
-		s_out = self.dense(t_out)
-
-		return s_out
-
-	def params(self, lr=0.001):
-		criterion = nn.MSELoss().cuda()
-		opt = optim.SGD(self.parameters(), lr=lr)
-		sch = optim.lr_scheduler.StepLR(opt, step_size=2, gamma=0.5)
-		return criterion, opt, sch
-
-	def format_batch(self, mat, ys, gpu=None):
-		# raw   : batch x timelen x seqlen
-		# needed: seqlen x batch x timelen
-
-		steps = mat.shape[2] - self.forecast
-		# withold steps for forecasting
-
-		batch = []
-		for si in range(steps):
-			batch.append(torch.Tensor(mat[:, :, self.forecast+si]).to(gpu))
-
-		batch = list(reversed(batch))
-		ys = ys[:, :5] # forecasting earlier
-		ys = np.flip(ys, axis=1).copy()
-		# sequence order is reversed, since rnn is unrolled upstream
-
-		ys = torch.from_numpy(ys).float().to(gpu)
-		return batch, ys
-
-if __name__ == '__main__':
-	import os, sys
-	sys.path.append('.')
-	from dataset import Routes
-
-	dset = Routes('train', 32, index_file='min-data.json')
-	Xs, Ys = dset.next()
-
-	model = Conv()
-	Xs, Ys = model.format_batch(Xs, Ys)
-	out = model(Xs)
-	print(out.size())
-	# model()
+		outputs = torch.stack(outputs, dim=0)
+		# return outputs, hidden
+		return outputs

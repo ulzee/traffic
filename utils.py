@@ -66,18 +66,34 @@ def dedupe(segs):
 					covered['%d-%d' % (ti+jj, si+ii)] = True
 	return unique
 
-def evaluate(dset, infer, crit, formt, device=None, result=False):
+def evaluate(dset, model, crit, norm=1, result=False):
+	model.eval()
 	eval_losses = []
-	for bii in range(dset.size()):
-		Xs, Ys = dset.next()
-		Xs, Ys = formt(Xs, Ys, gpu=device)
-
-		outputs = infer(Xs)
+	for bii, batch in enumerate(dset):
+		Xs, Ys = model.format_batch(batch)
+		outputs = model(Xs)
 
 		loss = crit(outputs, Ys)
 		eval_losses.append(loss.item())
-		sys.stdout.write('eval:%d/%d     \r' % (bii+1, dset.size()))
+		sys.stdout.write('eval:%d/%d     \r' % (bii+1, len(dset)))
 	sys.stdout.flush()
-	print('Eval loss:', np.mean(eval_losses))
+	print('Eval loss:', norm * np.mean(eval_losses))
 	if result:
-		return eval_losses
+		return np.mean(eval_losses)
+
+def high_integ(sample):
+	row_integs = []
+	for row in sample:
+	    row_integs.append(np.count_nonzero(np.isnan(row)) / len(row))
+	return np.argsort(row_integs), row_integs
+	# return np.argsort(row_integs)[0]
+	# return
+
+def show_context(sample, draw=True):
+	import matplotlib.pyplot as plt
+	plt.figure(figsize=(14, 4))
+	for hi in range(1, 6):
+		plt.plot(sample[-hi-1, :], color='#CCCCCC')
+	plt.plot(sample[-1, :], color='C0')
+	if draw:
+		plt.show(); plt.close()

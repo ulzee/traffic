@@ -33,7 +33,6 @@ class RNN(nn.Module):
 				nn.Linear(hsize, hsize),
 				nn.ReLU(),
 				nn.Linear(hsize, self.lag),
-				# nn.Linear(hsize, self.lag),
 			)
 			self.fcast = nn.Sequential(
 				nn.ReLU(),
@@ -94,53 +93,21 @@ class RNN(nn.Module):
 	def params(self, lr=0.001):
 		criterion = nn.MSELoss().cuda()
 		opt = optim.SGD(self.parameters(), lr=lr)
-		sch = optim.lr_scheduler.StepLR(opt, step_size=2, gamma=0.5)
+		sch = optim.lr_scheduler.StepLR(opt, step_size=60, gamma=0.5)
 		return criterion, opt, sch
 
-	# import torch
-	# import torch.nn as nn
-	# import numpy as np
-
-	def format_batch(self, mat, ys, gpu=None, wrap=True):
+	def format_batch(self, data, wrap=True, normalize=1):
 		# raw   : batch x timelen x seqlen
-		# needed: seqlen x batch x timelen
+		data /= normalize
+		data = torch.transpose(torch.transpose(data, 2, 1), 1, 0)
+		# fmt   : seqlen x batch x timelen
+		sequence = list(torch.split(data, 1, dim=0))
 
-		steps = mat.shape[2] - 1 # shift one for rolling
-		data = np.concatenate([np.expand_dims(ys, 1), mat], axis=1)
-		# steps = mat.shape[2] - self.forecast
-		# withold steps for forecasting
+		for ti in range(len(sequence)):
+			sequence[ti] = sequence[ti].to(self.device).float().squeeze(0)
 
-		Xs = data[:, :, -steps:]
-		Ys = data[:, :, :steps]
-		Xs, Ys = np.flip(Xs, -1), np.flip(Ys, -1)
-
-		if wrap:
-			xseq = []
-			for si in range(Xs.shape[2]):
-				xseq.append(torch.Tensor(Xs[:, :, si]).to(gpu))
-			Xs = xseq
-
-			yseq = []
-			for si in range(Ys.shape[2]):
-				yseq.append(torch.Tensor(Ys[:, :, si]).to(gpu))
-			Ys = yseq
-			Ys = torch.stack(Ys, dim=0)
+		Xs = list(reversed(sequence[1:]))
+		Ys = list(reversed(sequence[:-1])) # predict 1 stop back
+		Ys = torch.stack(Ys, dim=0)
 
 		return Xs, Ys
-
-		# seqX = []
-		# for _ in range(self.forecast - 1):
-		# 	seqX.append(None)
-		# 	# seqX.append(torch.zeros(mat.shape[0], mat.shape[1]).to(gpu))
-		# for si in range(steps):
-		# 	seqX.append(torch.Tensor(mat[:, :, self.forecast+si]).to(gpu))
-		# seqX = list(reversed(seqX))
-
-		# ys = ys[:, :5] # forecasting earlier stops
-		# # yhist = mat[:, :, :5]
-		# # ys = np.concatenate([np.expand_dims(ys, 1), yhist], axis=1)
-		# ys = np.flip(ys, axis=-1).copy()
-		# # sequence order is reversed, since rnn is unrolled upstream
-
-		# ys = torch.from_numpy(ys).float().to(gpu)
-		# return seqX, ys
