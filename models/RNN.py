@@ -12,7 +12,7 @@ class RNN(nn.Module):
 		# self.relu = relu
 		self.lag = 6 # temporal dimension
 		# self.lag = 5 # temporal dimension
-		# self.steps = 10 # spatial dimension (optional ?)
+		self.steps = 10 # spatial dimension (optional ?)
 		self.hidden_size = hidden_size
 		self.forecast = forecast
 
@@ -25,8 +25,10 @@ class RNN(nn.Module):
 				nn.ReLU(),
 				nn.Linear(hsize, hsize),
 				nn.ReLU(),
+				# nn.Dropout(0.5),
 			)
 			self.out = nn.Sequential(
+				# nn.Dropout(0.5),
 				nn.ReLU(),
 				nn.Linear(hsize, hsize),
 				nn.ReLU(),
@@ -34,32 +36,16 @@ class RNN(nn.Module):
 				nn.ReLU(),
 				nn.Linear(hsize, self.lag),
 			)
-			self.fcast = nn.Sequential(
-				nn.ReLU(),
-				nn.Linear(hsize, hsize),
-				nn.ReLU(),
-				nn.Linear(hsize, hsize),
-				nn.ReLU(),
-				nn.Linear(hsize, self.forecast),
-			)
 		else:
 			self.name += '_short'
 			self.inp = nn.Sequential(
 				nn.Linear(self.lag, hsize),
 			)
 			self.out = nn.Sequential(
-				nn.Linear(hsize, 1),
-			)
-			self.fcast = nn.Sequential(
-				nn.Linear(hsize, self.forecast),
+				nn.Linear(hsize, self.lag),
 			)
 
-		# else:
-		# 	self.inp = nn.Linear(self.lag, hidden_size)
-		# 	self.out = nn.Linear(hidden_size, 1)
-		# 	self.fcast = nn.Linear(hidden_size, self.forecast)
-
-		self.rnn = nn.LSTM(hidden_size, hidden_size, 2, dropout=0.05)
+		self.rnn = nn.LSTM(hidden_size, hidden_size, 1)
 		self.bsize = 32
 
 

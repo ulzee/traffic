@@ -4,6 +4,7 @@ from glob import glob
 import os, sys
 import numpy as np
 from configs import *
+from scipy.ndimage import gaussian_filter as blur
 
 segkey = lambda s1, s2: '%s-%s' % (s1, s2)
 
@@ -97,3 +98,6 @@ def show_context(sample, draw=True):
 	plt.plot(sample[-1, :], color='C0')
 	if draw:
 		plt.show(); plt.close()
+
+def hist_smooth(hist):
+	return np.array([blur(row, 2) for row in hist])

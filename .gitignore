@@ -6,6 +6,7 @@ checkpoints
 data
 spark
 *.json
+metadata
 
 # C extensions
 *.so

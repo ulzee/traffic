@@ -24,8 +24,31 @@ class Conv(RNN):
 			nn.Conv1d(128, 128, 3, padding=1),
 			nn.ReLU(),
 		)
+		# self.conv_s = nn.Sequential(
+		# 	nn.Conv2d(128, 256, 3, padding=1),
+		# 	nn.ReLU(),
+		# 	nn.Conv2d(256, 256, 3, padding=1),
+		# 	nn.MaxPool2d(2),
+		# 	nn.ReLU(),
 
-		self.rnn = nn.LSTM(3 * 128, hidden_size, 2, dropout=0.05)
+		# 	nn.Conv2d(256, 256, 3, padding=1),
+		# 	nn.ReLU(),
+		# 	nn.Conv2d(256, 256, 3, padding=1),
+		# 	nn.ReLU(),
+		# )
+		# self.dense_out = nn.Sequential(
+		# 	nn.Linear(4 * 256, 512),
+		# 	nn.ReLU(),
+		# 	nn.Linear(512, 512),
+		# 	nn.ReLU(),
+		# 	nn.Linear(512, (self.steps - 1) * self.lag),
+		# )
+		self.out = nn.Sequential(
+			nn.Linear(hidden_size, self.lag),
+		)
+
+		# self.rnn = nn.LSTM(3 * 128, hidden_size, 2, dropout=0.05)
+		self.rnn = nn.LSTM(3 * 128, hidden_size, 1)
 		self.bsize = 32
 
 	def step(self, input, hidden=None):
@@ -45,8 +68,27 @@ class Conv(RNN):
 		return output, hidden
 
 	def forward(self, inputs, hidden=None):
+		# steps = len(inputs)
+		# outputs = []
+
+		# temp = []
+		# for ii in range(steps):
+		# 	tconv = self.conv_t(inputs[ii].unsqueeze(1))
+		# 	temp.append(tconv)
+
+		# temp = torch.stack(temp, 2)
+		# spatial = self.conv_s(temp)
+		# # print(spatial.size())
+		# flat = spatial.squeeze(2).view(spatial.size()[0], -1)
+		# # print(flat.size())
+		# outputs = self.dense_out(flat)
+		# outputs = outputs.view(-1, outputs.size()[0], self.lag)
+		# # print(outputs.size())
+		# # assert False
+
+		# return outputs
+
 		steps = len(inputs)
-		# lastKnown = steps - self.forecast - 1
 		outputs = []
 
 		for ii in range(steps):
@@ -54,5 +96,5 @@ class Conv(RNN):
 			outputs.append(output)
 
 		outputs = torch.stack(outputs, dim=0)
-		# return outputs, hidden
+
 		return outputs

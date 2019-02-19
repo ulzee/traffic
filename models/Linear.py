@@ -9,20 +9,21 @@ class Linear(nn.Module):
 	def __init__(self, forecast=5):
 		super(Linear, self).__init__()
 
-		self.lag = 5 # temporal dimension
+		self.lag = 6 # temporal dimension
 		self.steps = 10 # spatial dimension (optional ?)
 		self.forecast = forecast # spatial dimension (optional ?)
 
 		self.op = nn.Linear(
-			self.lag * (self.steps - self.forecast),
-			self.forecast)
-			# self.lag + self.forecast)
+			self.lag * (self.steps - 1),
+			self.lag * (self.steps - 1))
 
 	def forward(self, inputs, hidden=None):
 		inputs = torch.cat(inputs, dim=1)
 
 		outputs = self.op(inputs)
 
+		outputs = outputs.view(outputs.size()[0], self.steps-1, self.lag)
+		outputs = torch.transpose(outputs, 0, 1)
 		return outputs
 
 	def params(self, lr=0.001):
@@ -31,21 +32,18 @@ class Linear(nn.Module):
 		sch = optim.lr_scheduler.StepLR(opt, step_size=2, gamma=0.5)
 		return criterion, opt, sch
 
-	def format_batch(self, mat, ys, gpu=None):
+	def format_batch(self, data, wrap=True, normalize=1):
 		# raw   : batch x timelen x seqlen
-		# needed: seqlen x batch x timelen
+		data /= normalize
+		data = torch.transpose(torch.transpose(data, 2, 1), 1, 0)
+		# fmt   : seqlen x batch x timelen
+		sequence = list(torch.split(data, 1, dim=0))
 
-		steps = mat.shape[2] - self.forecast
-		# withold steps for forecasting
+		for ti in range(len(sequence)):
+			sequence[ti] = sequence[ti].to(self.device).float().squeeze(0)
 
-		batch = []
-		for si in range(steps):
-			batch.append(torch.Tensor(mat[:, :, steps+si]).to(gpu))
+		Xs = list(reversed(sequence[1:]))
+		Ys = list(reversed(sequence[:-1])) # predict 1 stop back
+		Ys = torch.stack(Ys, dim=0)
 
-		batch = list(reversed(batch))
-		ys = ys[:, :5]
-		ys = np.flip(ys, axis=1).copy()
-		# sequence order is reversed, to infer traffic upstream
-
-		ys = torch.from_numpy(ys).float().to(gpu)
-		return batch, ys
+		return Xs, Ys

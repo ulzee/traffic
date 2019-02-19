@@ -9,17 +9,20 @@ import json
 from time import time
 from numpy.random import shuffle as npshuff
 from torch.utils import data
+from scipy.ndimage import gaussian_filter as blur
 
 class Routes(data.Dataset):
 	def __init__(self, mode, bsize, minValid=0.7,
-		index_file='metadata.json',
+		index_file='min-data.json',
 		reserved='reserved_routes.json',
 		overlap=True,
+		smooth=False,
 		device=None):
 
 		self.device = device
 		self.bsize = bsize
 		self.mode = mode
+		self.smooth = smooth
 
 		t0 = time()
 		with open(index_file) as fl:
@@ -73,6 +76,9 @@ class Routes(data.Dataset):
 		# Ys = np.transpose(hist[:, :9], (1, 0)) # predict 1 stop back
 		# Xs = torch.Tensor(Xs).to(device)
 		# Ys = torch.Tensor(Ys).to(device)
+		if self.smooth:
+			hist = hist_smooth(hist)
+			# hist = np.array([blur(row, 2) for row in hist])
 		return hist
 		# return Xs, Ys
 
@@ -109,12 +115,14 @@ class LocalRoute(Routes):
 		local,
 		mode, bsize,
 		local_split=0.8, # 0.2 recent will be used for testing
-		index_file='metadata.json',
+		index_file='min-data.json',
+		smooth=False,
 		device=None):
 
 		self.device = device
 		self.bsize = bsize
 		self.mode = mode
+		self.smooth = smooth
 
 		t0 = time()
 		with open(index_file) as fl:
@@ -135,6 +143,53 @@ class LocalRoute(Routes):
 			for pair in route['trainable']:
 				# TODO: split train/test here
 				ti, si = pair
+				if (mode == 'train' and ti < split_ind) \
+					or (mode == 'test' and ti >= split_ind):
+					self.refs.append([route['name']] + pair)
+
+		assert len(meta)
+		print(' [*] Subset %s: %d' % (mode, len(self.refs)))
+
+		if mode == 'train':
+			npshuff(self.refs)
+		self.ind = 0
+
+class SingleStop(Routes):
+	def __init__(self,
+		local, stop,
+		mode, bsize,
+		local_split=0.8, # 0.2 recent will be used for testing
+		index_file='min-data.json',
+		smooth=False,
+		device=None):
+
+		self.device = device
+		self.bsize = bsize
+		self.mode = mode
+		self.smooth = smooth
+		self.stop = stop
+
+		t0 = time()
+		with open(index_file) as fl:
+			meta = json.load(fl)
+
+		single_meta = list(filter(lambda ent: ent['name'] == local, meta))
+		assert len(single_meta)
+		meta = single_meta
+		self.meta = meta
+
+		print('Locals dataset: %s' % mode)
+		print(' [*] Loaded routes:', len(meta), '(%.2fs)' % (time() - t0))
+		print(' [*] Has trainable inds:', len(meta[0]['trainable']))
+
+		self.refs = []
+		split_ind = int(13248 * local_split)
+		for route in meta:
+			for pair in route['trainable']:
+				# TODO: split train/test here
+				ti, si = pair
+				if si != stop:
+					continue
 				if (mode == 'train' and ti < split_ind) \
 					or (mode == 'test' and ti >= split_ind):
 					self.refs.append([route['name']] + pair)
