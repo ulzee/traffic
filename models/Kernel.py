@@ -67,9 +67,19 @@ class Update(nn.Module):
 		self.msg_in = nn.Sequential(
 			nn.Linear(hsize, hsize)
 		)
-		self.h_out = nn.Sequential(
-			nn.Linear(hsize * 2, hsize + 1)
+		self.h_dense = nn.Sequential(
+			nn.Linear(hsize * 2, hsize),
+			nn.ReLU(),
+			nn.Linear(hsize, hsize),
+			nn.ReLU()
 		)
+		self.h_out = nn.Sequential(
+			nn.Linear(hsize, hsize)
+		)
+		self.v_out = nn.Sequential(
+			nn.Linear(hsize, 1)
+		)
+
 
 	def forward(self, node):
 		if type(node.msg) is type(None): # an end node
@@ -77,8 +87,9 @@ class Update(nn.Module):
 
 		mix = torch.cat([self.h_in(node.h), self.msg_in(node.msg)], dim=1)
 
+		mix = self.h_dense(mix)
 		# h and v are updated
-		node.v, node.h = torch.split(self.h_out(mix), [1, self.hsize], dim=1)
+		node.v, node.h = self.v_out(mix), self.h_out(mix)
 		return node.v, node.h
 
 class Node:
