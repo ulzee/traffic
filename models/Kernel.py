@@ -18,37 +18,55 @@ class Kernel(nn.Module):
 		self.hsize = hsize
 		# self.hsize = hsize
 
-		def inst_msgop():
+		def inst_msgop(has_h=True):
 			v_in = nn.Sequential(
 				nn.Linear(1, hsize)
 			)
-			h_in = nn.Sequential(
-				nn.Linear(hsize, hsize)
-			)
+			if has_h:
+				h_in = nn.Sequential(
+					nn.Linear(hsize, hsize)
+				)
 			msg_out = nn.Sequential(
-				nn.Linear(hsize * 2, hsize)
+				nn.Linear(hsize * (2 if has_h else 1), hsize),
+				# nn.ReLU(),
+				# nn.Linear(hsize, hsize),
+				nn.Sigmoid(),
 			)
 			# return v_in, h_in, msg_out
-			return nn.ModuleList([v_in, h_in, msg_out])
+			if has_h:
+				return nn.ModuleList([v_in, h_in, msg_out])
+			else:
+				return nn.ModuleList([v_in, msg_out])
+
+		self.mops_0 = nn.ModuleList()
+		for _ in range(insize):
+			self.mops_0.append(inst_msgop(has_h=False))
 
 		self.mops = nn.ModuleList() # independent weights per neighbor
 		for _ in range(insize):
-			self.mops.append(inst_msgop())
+			self.mops.append(inst_msgop(has_h=True))
 		# self.upop = nn.Sequential(
 		# 	nn.Linear(hsize * 2, hsize + 1)
 		# )
 
-	def forward(self, node):
+	def forward(self, node, initial=False):
 		if len(node.ns) == 0:
 			node.msg = None
 			return None
 
 		msgs = []
 		rel_nodes = node.ns + [node] # incl. itself
-		for (v_in, h_in, msg_out), other in zip(self.mops, rel_nodes):
-			mix = torch.cat([v_in(other.v), h_in(other.h)], dim=1)
-			msgout = msg_out(mix)
-			msgs.append(msgout)
+		# rel_nodes = node.ns # incl. itself
+		if initial:
+			for (v_in, msg_out), other in zip(self.mops_0, rel_nodes):
+				mix = v_in(other.v)
+				msgout = msg_out(mix)
+				msgs.append(msgout)
+		else:
+			for (v_in, h_in, msg_out), other in zip(self.mops, rel_nodes):
+				mix = torch.cat([v_in(other.v), h_in(other.h)], dim=1)
+				msgout = msg_out(mix)
+				msgs.append(msgout)
 		assert len(msgs)
 		msgs = torch.stack(msgs, dim=1).to(self.device)
 		update = torch.sum(msgs, dim=1)
@@ -71,12 +89,16 @@ class Update(nn.Module):
 			nn.Linear(hsize * 2, hsize),
 			# nn.ReLU(),
 			# nn.Linear(hsize, hsize),
+			# nn.ReLU(),
+			# nn.Linear(hsize, hsize),
+			# nn.Dropout(0.5)
 			# nn.ReLU()
 		)
 		self.h_after = nn.Sequential(
-			nn.Linear(hsize, hsize+1),
-			# nn.ReLU(),
 			# nn.Linear(hsize, hsize),
+			# nn.ReLU(),
+			nn.Linear(hsize, hsize+1),
+			# nn.Sigmoid(),
 			# nn.ReLU()
 		)
 		# self.h_out = nn.Sequential(
@@ -86,7 +108,7 @@ class Update(nn.Module):
 		# 	nn.Linear(hsize, 1)
 		# )
 		# in: seqlen x batch x features
-		self.rnn = nn.LSTM(hsize, hsize, 2)
+		self.rnn = nn.LSTM(hsize, hsize, 1)
 
 
 	def forward(self, node):
@@ -104,11 +126,12 @@ class Update(nn.Module):
 		# h and v are updated
 		# node.v, node.h = self.v_out(mix), self.h_out(mix)
 		node.v, node.h = torch.split(mix, [1, self.hsize], dim=1)
+		node.h = nn.Sigmoid()(node.h)
 		return node.v, node.h
 
 class Node:
 	def __init__(self, value, zero, device=None):
-		self._v = value.clone().to(device).float() # label
+		self._v = value.clone().to(device).float() # .v may be modified
 		self.v = value.to(device).float()
 		self.h = zero().to(device).float()
 		self.hidden = None
