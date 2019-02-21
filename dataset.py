@@ -159,10 +159,14 @@ class LocalRoute(Routes):
 		ref = self.refs[index]
 		rname, ti, si = ref
 		hist = self.mat[ti-self.lag:ti, si-10:si]
+		assert np.count_nonzero(np.isnan(hist)) == 0
 		hist[hist > self.maxval] = self.maxval
 		if self.smooth:
 			hist = hist_smooth(hist)
 		return hist
+
+	def __len__(self):
+		return int((len(self.refs) // self.bsize) * self.bsize)
 
 class SingleStop(LocalRoute):
 	def __init__(self,

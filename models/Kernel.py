@@ -81,6 +81,59 @@ class Update(nn.Module):
 		node.v, node.h = torch.split(self.h_out(mix), [1, self.hsize], dim=1)
 		return node.v, node.h
 
+class Node:
+	def __init__(self, value, zero, device=None):
+		self._v = value.clone().to(device).float() # label
+		self.v = value.to(device).float()
+		self.h = zero().to(device).float()
+		self.ns = [] # neighbors
+
+	def show(self):
+		pnt = self
+		while len(pnt.ns):
+			print(pnt.v.size(), end=' ')
+			pnt = pnt.ns[0]
+		print()
+
+	def ln(self):
+		l = 0
+		pnt = self
+		while len(pnt.ns):
+			pnt = pnt.ns[0]
+			l += 1
+		return l
+
+def routeToGraph(batch, zero, device=None):
+	at_time = [] # t-h ... t
+	for time in torch.split(batch, 1, dim=1):
+		root, pnt = None, None
+		for stop in torch.split(time.squeeze(1), 1, dim=1):
+			if root is None:
+				root = Node(stop, zero, device=device)
+				pnt = root
+			else:
+				nd = Node(stop, zero, device=device)
+				pnt.ns.append(nd)
+				pnt = nd
+		at_time.append(root)
+	return at_time
+
+def inst_tree(struct, nodes, device=None):
+	ls = []
+	params = []
+	for ent in nodes:
+		inst = struct(ent) #.to(device)
+		params += list(inst.parameters())
+		inst.device = device
+		ns, nparams = inst_tree(struct, ent.ns)
+		params += nparams
+		kobj = dict(
+			op=inst,
+			ns=ns
+		)
+		ls.append(kobj)
+	return ls, params
+
 if __name__ == '__main__':
 	model = Kernel()
 	print(list(model.parameters()))
