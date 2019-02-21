@@ -69,16 +69,24 @@ class Update(nn.Module):
 		)
 		self.h_dense = nn.Sequential(
 			nn.Linear(hsize * 2, hsize),
-			nn.ReLU(),
-			nn.Linear(hsize, hsize),
-			nn.ReLU()
+			# nn.ReLU(),
+			# nn.Linear(hsize, hsize),
+			# nn.ReLU()
 		)
-		self.h_out = nn.Sequential(
-			nn.Linear(hsize, hsize)
+		self.h_after = nn.Sequential(
+			nn.Linear(hsize, hsize+1),
+			# nn.ReLU(),
+			# nn.Linear(hsize, hsize),
+			# nn.ReLU()
 		)
-		self.v_out = nn.Sequential(
-			nn.Linear(hsize, 1)
-		)
+		# self.h_out = nn.Sequential(
+		# 	nn.Linear(hsize, hsize + 1)
+		# )
+		# self.v_out = nn.Sequential(
+		# 	nn.Linear(hsize, 1)
+		# )
+		# in: seqlen x batch x features
+		self.rnn = nn.LSTM(hsize, hsize, 2)
 
 
 	def forward(self, node):
@@ -88,8 +96,14 @@ class Update(nn.Module):
 		mix = torch.cat([self.h_in(node.h), self.msg_in(node.msg)], dim=1)
 
 		mix = self.h_dense(mix)
+		mix, hidden = self.rnn(mix.unsqueeze(0), node.hidden)
+		node.hidden = hidden
+		mix = mix.squeeze(0)
+		mix = self.h_after(mix)
+
 		# h and v are updated
-		node.v, node.h = self.v_out(mix), self.h_out(mix)
+		# node.v, node.h = self.v_out(mix), self.h_out(mix)
+		node.v, node.h = torch.split(mix, [1, self.hsize], dim=1)
 		return node.v, node.h
 
 class Node:
@@ -97,6 +111,7 @@ class Node:
 		self._v = value.clone().to(device).float() # label
 		self.v = value.to(device).float()
 		self.h = zero().to(device).float()
+		self.hidden = None
 		self.ns = [] # neighbors
 
 	def show(self):
