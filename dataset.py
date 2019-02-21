@@ -153,11 +153,13 @@ class LocalRoute(Routes):
 			npshuff(self.refs)
 		self.ind = 0
 		self.mat = np.load('data/history/%s.npy' % (local))
+		self.maxval=40
 
 	def __getitem__(self, index):
 		ref = self.refs[index]
 		rname, ti, si = ref
 		hist = self.mat[ti-self.lag:ti, si-10:si]
+		hist[hist > self.maxval] = self.maxval
 		if self.smooth:
 			hist = hist_smooth(hist)
 		return hist

@@ -3,9 +3,9 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
-from models.template import Template
+# from models.template import Template
 
-class Kernel(Template):
+class Kernel(nn.Module):
 	# name = 'cast'
 	def __init__(self,
 			insize=2, # self + 1 neighbor (default)
@@ -55,7 +55,7 @@ class Kernel(Template):
 		node.msg = update
 		return update
 
-class Update(Template):
+class Update(nn.Module):
 	# name = 'cast'
 	def __init__(self, hsize=64):
 		super(Update, self).__init__()
@@ -80,3 +80,7 @@ class Update(Template):
 		# h and v are updated
 		node.v, node.h = torch.split(self.h_out(mix), [1, self.hsize], dim=1)
 		return node.v, node.h
+
+if __name__ == '__main__':
+	model = Kernel()
+	print(list(model.parameters()))
