@@ -20,7 +20,7 @@ class Kernel(nn.Module):
 
 		def inst_msgop():
 			msg_out = nn.Sequential(
-				nn.Linear(1, hsize)
+				nn.Linear(1 + hsize, hsize)
 			)
 			return nn.ModuleList([msg_out])
 
@@ -41,14 +41,15 @@ class Kernel(nn.Module):
 		rel_nodes = node.ns
 		mops = self.mops[iteration]
 		for (msg_out,), other in zip(mops, rel_nodes):
-			# mix = torch.cat([other.v, other.h], dim=1)
-			inp = other.v
+			# inp = torch.cat([other.v.detach(), other.h.detach()], dim=1)
+			inp = torch.cat([other.v, other.h], dim=1)
+			# inp = other.v
 			mix = msg_out(inp)
 			msgs.append(mix)
 
 		assert len(msgs)
 		msgs = torch.stack(msgs, dim=1).to(self.device)
-		msg_result = nn.Sigmoid()(torch.sum(msgs, dim=1))
+		msg_result = torch.sum(msgs, dim=1)
 		node.msg = msg_result
 		return msg_result
 
@@ -67,7 +68,6 @@ class Update(nn.Module):
 			nn.Linear(hsize, hsize)
 		)
 		# in: seqlen x batch x features
-		# self.rnn = nn.LSTM(hsize, hsize, 1)
 		self.rnn = nn.Sequential(
 			nn.Linear(hsize, hsize),
 			nn.ReLU(),
@@ -76,22 +76,39 @@ class Update(nn.Module):
 
 	def forward(self, node):
 		assert type(node.msg) is not type(None)
-
-		# mix = torch.cat([node.h, node.msg], dim=1)
-		# mix = torch.cat([node.h, node.msg], dim=1)
 		mix = node.msg
 		node.msg = None
-		# in: seqlen x batch x dims
-		# mix, hidden = self.rnn(mix.unsqueeze(0), node.hidden)
-		# node.hidden = hidden
-		# mix = mix.squeeze(0)
 		mix = self.rnn(mix)
-
-		# node.h = self.h_out(mix)
-		# mix = self.h_after(mix)
 
 		# h and v are updated
 		node.v = self.v_out(mix)
+		node.h = self.h_out(mix)
+		return node.v
+
+class TimeStep(nn.Module):
+	def __init__(self, hsize=64):
+		super(TimeStep, self).__init__()
+
+		self.hsize = hsize
+		# in: seqlen x batch x features
+		self.rnn = nn.LSTM(hsize, hsize, 1)
+		self.v_out = nn.Sequential(
+			nn.Linear(hsize, hsize),
+			nn.ReLU(),
+			nn.Linear(hsize, 1)
+		)
+		self.h_out = nn.Sequential(
+			nn.Linear(hsize, hsize)
+		)
+
+	def forward(self, node):
+		inp = node.h
+
+		mix, node.hidden = self.rnn(inp.unsqueeze(0), node.hidden)
+		mix = mix.squeeze(0)
+		node.v = self.v_out(mix)
+		node.h = self.h_out(mix)
+
 		return node.v
 
 class Node:
@@ -167,8 +184,11 @@ def message(kernels, graph_t, iteration):
 	op = lambda kern, node: kern['op'](node, iteration)
 	zip_op(kernels, graph_t, op=op)
 
-def recieve(upops, graph_t):
+def update(upops, graph_t):
 	zip_op(upops, graph_t, op=lambda up, node: up['op'](node))
+
+def timestep(tops, graph_t):
+	zip_op(tops, graph_t, op=lambda top, node: top['op'](node))
 
 def count_rec(node, cf):
 	return 1 + sum([count_rec(cn, cf) for cn in cf(node)])
