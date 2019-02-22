@@ -215,6 +215,20 @@ def reassign_v(states, graph_t):
 		for c1, c2 in zip(n1.ns, n2.ns):
 			ls.append((c1, c2))
 
+def train_mode(ks, us, train=True):
+	ls = [(ks, us)]
+	while len(ls):
+		nk, nu = ls[0]
+		ls = ls[1:]
+		if train:
+			nk['op'].train()
+			nu['op'].train()
+		else:
+			nk['op'].eval()
+			nu['op'].eval()
+		for ck, cu in zip(nk['ns'], nu['ns']):
+			ls.append((ck, cu))
+
 if __name__ == '__main__':
 	model = Kernel()
 	print(list(model.parameters()))
