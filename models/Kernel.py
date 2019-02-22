@@ -9,7 +9,8 @@ class Kernel(nn.Module):
 	# name = 'cast'
 	def __init__(self,
 			insize=2, # self + 1 neighbor (default)
-			hsize=64 # size of embedding vector
+			hsize=64, # size of embedding vector
+			iterations=5,
 		):
 
 		super(Kernel, self).__init__()
@@ -18,21 +19,29 @@ class Kernel(nn.Module):
 		self.hsize = hsize
 
 		def inst_msgop():
-			v_in = nn.Sequential(
+			msg_out = nn.Sequential(
 				nn.Linear(1 + hsize, hsize)
 			)
-			return nn.ModuleList([v_in])
+			return nn.ModuleList([msg_out])
 
-		self.mops = nn.ModuleList() # independent weights per neighbor
-		for _ in range(insize):
-			self.mops.append(inst_msgop())
+		# NOTE: independent weights per neighbor
+		# NOTE: independent weights per iteration level
+		self.mops = nn.ModuleList()
+		for iter in range(iterations):
+			at_iter = nn.ModuleList()
+			for _ in range(insize):
+				at_iter.append(inst_msgop())
+			self.mops.append(at_iter)
+		assert len(self.mops) == iterations
 
-	def forward(self, node):
+	def forward(self, node, iteration):
 		assert len(node.ns)
 
 		msgs = []
 		rel_nodes = node.ns
-		for (msg_out,), other in zip(self.mops, rel_nodes):
+		mops = self.mops[iteration]
+		for (msg_out,), other in zip(mops, rel_nodes):
+			# mix = torch.cat([other.v, other.h], dim=1)
 			mix = torch.cat([other.v, other.h], dim=1)
 			mix = msg_out(mix)
 			msgs.append(mix)
@@ -52,8 +61,16 @@ class Update(nn.Module):
 		self.v_out = nn.Sequential(
 			nn.Linear(hsize, 1)
 		)
+		self.h_out = nn.Sequential(
+			nn.Linear(hsize, hsize)
+		)
 		# in: seqlen x batch x features
-		self.rnn = nn.LSTM(hsize, hsize, 1)
+		# self.rnn = nn.LSTM(hsize, hsize, 1)
+		self.rnn = nn.Sequential(
+			nn.Linear(hsize, hsize),
+			nn.ReLU(),
+			nn.Linear(hsize, hsize)
+		)
 
 	def forward(self, node):
 		assert type(node.msg) is not type(None)
@@ -61,10 +78,12 @@ class Update(nn.Module):
 		mix = node.msg
 		node.msg = None
 		# in: seqlen x batch x dims
-		mix, hidden = self.rnn(mix.unsqueeze(0), node.hidden)
-		node.hidden = hidden
-		mix = mix.squeeze(0)
-		node.h = mix
+		# mix, hidden = self.rnn(mix.unsqueeze(0), node.hidden)
+		# node.hidden = hidden
+		# mix = mix.squeeze(0)
+		mix = self.rnn(mix)
+
+		node.h = self.h_out(mix)
 		# mix = self.h_after(mix)
 
 		# h and v are updated
@@ -140,10 +159,8 @@ def zip_op(t1, t2, op):
 		for c1, c2 in zip(n1['ns'], n2.ns):
 			ls.append((c1, c2))
 
-def message(kernels, graph_t, initial=False):
-	# op = lambda kern, node: kern['op'](node, initial) if initial else \
-	# 	lambda kern, node: kern['op'](node)
-	op = lambda kern, node: kern['op'](node)
+def message(kernels, graph_t, iteration):
+	op = lambda kern, node: kern['op'](node, iteration)
 	zip_op(kernels, graph_t, op=op)
 
 def update(upops, graph_t):
