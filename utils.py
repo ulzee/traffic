@@ -94,10 +94,11 @@ def show_context(sample, draw=True):
 	import matplotlib.pyplot as plt
 	plt.figure(figsize=(14, 4))
 	for hi in range(1, 6):
-		plt.plot(sample[-hi-1, :], color='#CCCCCC')
-	plt.plot(sample[-1, :], color='C0')
+		plt.plot(sample[-hi-1, :], color='#DDDDDD')
+	p = plt.plot(sample[-1, :], color='C0')
 	if draw:
 		plt.show(); plt.close()
+	return p
 
 def hist_smooth(hist):
 	return np.array([blur(row, 2) for row in hist])

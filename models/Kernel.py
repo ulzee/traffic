@@ -90,6 +90,11 @@ class TimeStep(nn.Module):
 		super(TimeStep, self).__init__()
 
 		self.hsize = hsize
+		self.h_in = nn.Sequential(
+			nn.Linear(hsize, hsize),
+			nn.ReLU(),
+			nn.Linear(hsize, hsize)
+		)
 		# in: seqlen x batch x features
 		self.rnn = nn.LSTM(hsize, hsize, 1)
 		self.v_out = nn.Sequential(
@@ -97,17 +102,18 @@ class TimeStep(nn.Module):
 			nn.ReLU(),
 			nn.Linear(hsize, 1)
 		)
-		self.h_out = nn.Sequential(
-			nn.Linear(hsize, hsize)
-		)
+		# self.h_out = nn.Sequential(
+		# 	nn.Linear(hsize, hsize)
+		# )
 
 	def forward(self, node):
-		inp = node.h
+		# inp = node.h
+		inp = self.h_in(node.h)
 
-		mix, node.hidden = self.rnn(inp.unsqueeze(0), node.hidden)
-		mix = mix.squeeze(0)
+		mix = inp
+		# mix, node.hidden = self.rnn(inp.unsqueeze(0), node.hidden)
+		# mix = mix.squeeze(0)
 		node.v = self.v_out(mix)
-		node.h = self.h_out(mix)
 
 		return node.v
 
