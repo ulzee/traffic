@@ -31,6 +31,7 @@ class Kernel(nn.Module):
 				# nn.ReLU(),
 				# nn.Linear(hsize, hsize),
 				nn.Sigmoid(),
+				# nn.ReLU(),
 			)
 			# return v_in, h_in, msg_out
 			if has_h:
@@ -87,26 +88,31 @@ class Update(nn.Module):
 		)
 		self.h_dense = nn.Sequential(
 			nn.Linear(hsize * 2, hsize),
-			# nn.ReLU(),
-			# nn.Linear(hsize, hsize),
-			# nn.ReLU(),
-			# nn.Linear(hsize, hsize),
+			nn.ReLU(),
+			nn.Linear(hsize, hsize),
+			nn.ReLU(),
+			nn.Linear(hsize, hsize),
 			# nn.Dropout(0.5)
 			# nn.ReLU()
 		)
-		self.h_after = nn.Sequential(
+		# self.h_after = nn.Sequential(
+		# 	# nn.Linear(hsize, hsize),
+		# 	# nn.ReLU(),
+		# 	nn.Linear(hsize, hsize+1),
+		# 	# nn.Sigmoid(),
+		# 	# nn.ReLU()
+		# )
+		self.h_out = nn.Sequential(
+			nn.Linear(hsize, hsize),
+			nn.ReLU(),
+			nn.Linear(hsize, hsize),
+			nn.Sigmoid(),
+		)
+		self.v_out = nn.Sequential(
 			# nn.Linear(hsize, hsize),
 			# nn.ReLU(),
-			nn.Linear(hsize, hsize+1),
-			# nn.Sigmoid(),
-			# nn.ReLU()
+			nn.Linear(hsize, 1)
 		)
-		# self.h_out = nn.Sequential(
-		# 	nn.Linear(hsize, hsize + 1)
-		# )
-		# self.v_out = nn.Sequential(
-		# 	nn.Linear(hsize, 1)
-		# )
 		# in: seqlen x batch x features
 		self.rnn = nn.LSTM(hsize, hsize, 1)
 
@@ -121,12 +127,12 @@ class Update(nn.Module):
 		mix, hidden = self.rnn(mix.unsqueeze(0), node.hidden)
 		node.hidden = hidden
 		mix = mix.squeeze(0)
-		mix = self.h_after(mix)
+		# mix = self.h_after(mix)
 
 		# h and v are updated
-		# node.v, node.h = self.v_out(mix), self.h_out(mix)
-		node.v, node.h = torch.split(mix, [1, self.hsize], dim=1)
-		node.h = nn.Sigmoid()(node.h)
+		node.v, node.h = self.v_out(mix), self.h_out(mix)
+		# node.v, node.h = torch.split(mix, [1, self.hsize], dim=1)
+		# node.h = nn.Sigmoid()(node.h)
 		return node.v, node.h
 
 class Node:
@@ -167,21 +173,59 @@ def routeToGraph(batch, zero, device=None):
 		at_time.append(root)
 	return at_time
 
-def inst_tree(struct, nodes, device=None):
+def inst_tree(struct, node, device=None):
 	ls = []
 	params = []
-	for ent in nodes:
-		inst = struct(ent) #.to(device)
-		params += list(inst.parameters())
+	nodeObj = None
+	if len(node.ns): # instance only nodes w/ neighbors
+		inst = struct(node)
 		inst.device = device
-		ns, nparams = inst_tree(struct, ent.ns)
-		params += nparams
-		kobj = dict(
+		params += list(inst.parameters())
+		nodeObj = dict(
 			op=inst,
-			ns=ns
+			ns=ls
 		)
-		ls.append(kobj)
-	return ls, params
+		for neighbor in node.ns:
+			ns, nparams = inst_tree(struct, neighbor, device)
+			params += nparams
+			if ns is not None: ls.append(ns) # gather results
+	return nodeObj, params
+
+def zip_op(t1, t2, op):
+    ls = [(t1, t2)]
+    while len(ls):
+        n1, n2 = ls[0]
+        ls = ls[1:]
+        op(n1, n2)
+        for c1, c2 in zip(n1['ns'], n2.ns):
+            ls.append((c1, c2))
+
+def message(kernels, graph_t, initial=False):
+    op = lambda kern, node: kern['op'](node, initial) if initial else \
+        lambda kern, node: kern['op'](node)
+    zip_op(kernels, graph_t, op=op)
+
+def update(upops, graph_t):
+    zip_op(upops, graph_t, op=lambda up, node: up['op'](node))
+
+def count_rec(node, cf):
+	return 1 + sum([count_rec(cn, cf) for cn in cf(node)])
+
+def gather_predictions(_node, node):
+    # end nodes do not hold convolved results, so they are ignored
+    ls = [(_node._v, node.v)] if len(node.ns) else []
+    for _nb, nb in zip(_node.ns, node.ns):
+        ls += gather_predictions(_nb, nb)
+    return ls
+
+def reassign_v(states, graph_t):
+    ls = [(states, graph_t)]
+    while len(ls):
+        n1, n2 = ls[0]
+        ls = ls[1:]
+        n1.v = n2._v.clone()
+        for c1, c2 in zip(n1.ns, n2.ns):
+            ls.append((c1, c2))
 
 if __name__ == '__main__':
 	model = Kernel()

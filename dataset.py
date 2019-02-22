@@ -115,6 +115,7 @@ class LocalRoute(Routes):
 		local,
 		mode, bsize,
 		lag=6,
+		stops=10,
 		local_split=0.8, # 0.2 recent will be used for testing
 		meta_path='metadata/2h',
 		# index_file='min-data.json',
@@ -126,6 +127,7 @@ class LocalRoute(Routes):
 		self.mode = mode
 		self.smooth = smooth
 		self.lag = lag
+		self.stops = stops
 
 		t0 = time()
 		with open('%s/%s.json' % (meta_path, local)) as fl:
@@ -158,7 +160,7 @@ class LocalRoute(Routes):
 	def __getitem__(self, index):
 		ref = self.refs[index]
 		rname, ti, si = ref
-		hist = self.mat[ti-self.lag:ti, si-10:si]
+		hist = self.mat[ti-self.lag:ti, si-self.stops:si]
 		assert np.count_nonzero(np.isnan(hist)) == 0
 		hist[hist > self.maxval] = self.maxval
 		if self.smooth:
@@ -173,6 +175,7 @@ class SingleStop(LocalRoute):
 		local, stop_ind,
 		mode, bsize,
 		lag=6,
+		stops=10,
 		local_split=0.8, # 0.2 recent will be used for testing
 		meta_path='metadata/2h',
 		smooth=False,
@@ -182,6 +185,7 @@ class SingleStop(LocalRoute):
 			local,
 			mode, bsize,
 			lag,
+			stops,
 			local_split,
 			meta_path, smooth, device)
 
