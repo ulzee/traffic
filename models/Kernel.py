@@ -20,7 +20,7 @@ class Kernel(nn.Module):
 
 		def inst_msgop():
 			msg_out = nn.Sequential(
-				nn.Linear(1 + hsize, hsize)
+				nn.Linear(1, hsize)
 			)
 			return nn.ModuleList([msg_out])
 
@@ -42,13 +42,13 @@ class Kernel(nn.Module):
 		mops = self.mops[iteration]
 		for (msg_out,), other in zip(mops, rel_nodes):
 			# mix = torch.cat([other.v, other.h], dim=1)
-			mix = torch.cat([other.v, other.h], dim=1)
-			mix = msg_out(mix)
+			inp = other.v
+			mix = msg_out(inp)
 			msgs.append(mix)
 
 		assert len(msgs)
 		msgs = torch.stack(msgs, dim=1).to(self.device)
-		msg_result = torch.sum(msgs, dim=1)
+		msg_result = nn.Sigmoid()(torch.sum(msgs, dim=1))
 		node.msg = msg_result
 		return msg_result
 
@@ -59,6 +59,8 @@ class Update(nn.Module):
 
 		self.hsize = hsize
 		self.v_out = nn.Sequential(
+			nn.Linear(hsize, hsize),
+			nn.ReLU(),
 			nn.Linear(hsize, 1)
 		)
 		self.h_out = nn.Sequential(
@@ -75,6 +77,8 @@ class Update(nn.Module):
 	def forward(self, node):
 		assert type(node.msg) is not type(None)
 
+		# mix = torch.cat([node.h, node.msg], dim=1)
+		# mix = torch.cat([node.h, node.msg], dim=1)
 		mix = node.msg
 		node.msg = None
 		# in: seqlen x batch x dims
@@ -83,7 +87,7 @@ class Update(nn.Module):
 		# mix = mix.squeeze(0)
 		mix = self.rnn(mix)
 
-		node.h = self.h_out(mix)
+		# node.h = self.h_out(mix)
 		# mix = self.h_after(mix)
 
 		# h and v are updated
@@ -163,7 +167,7 @@ def message(kernels, graph_t, iteration):
 	op = lambda kern, node: kern['op'](node, iteration)
 	zip_op(kernels, graph_t, op=op)
 
-def update(upops, graph_t):
+def recieve(upops, graph_t):
 	zip_op(upops, graph_t, op=lambda up, node: up['op'](node))
 
 def count_rec(node, cf):
