@@ -20,8 +20,10 @@ class Linear(nn.Module):
 				self.lag * (self.steps - 1))
 		else:
 			self.op = nn.Linear(
-				self.lag * (self.steps - self.forecast),
-				self.forecast)
+				self.lag * self.steps,
+				self.steps)
+				# self.lag * (self.steps - self.forecast),
+				# self.forecast)
 
 	def forward(self, inputs, hidden=None):
 		# inputs = torch.cat(inputs, dim=1)
@@ -58,8 +60,10 @@ class Linear(nn.Module):
 			return Xs, Ys
 		else:
 			# raw   : batch x timelen x seqlen
-			Xs = data[:, :, self.forecast:]
-			Ys = data[:, -1, :self.forecast].to(self.device).float()
+			# Xs = data[:, :, self.forecast:]
+			# Ys = data[:, -1, :self.forecast].to(self.device).float()
+			Xs = data[:, :-1, :]
+			Ys = data[:, -1, :].to(self.device).float()
 
 			bytime = torch.split(Xs, 1, 1)
 			bytime = list(map(lambda ent: ent.squeeze(1), bytime))

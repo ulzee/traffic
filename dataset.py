@@ -170,6 +170,16 @@ class LocalRoute(Routes):
 	def __len__(self):
 		return int((len(self.refs) // self.bsize) * self.bsize)
 
+	def yavg(self):
+		avg = 0
+		for ref in self.refs:
+			rname, ti, si = ref
+			hist = self.mat[ti-1, si-self.stops:si]
+			# hist = self.mat[ti-self.lag:ti, si-self.stops:si]
+			assert np.count_nonzero(np.isnan(hist)) == 0
+			avg += np.sum(hist) / (self.stops * len(self.refs))
+		return avg
+
 class SingleStop(LocalRoute):
 	def __init__(self,
 		local, stop_ind,

@@ -4,13 +4,13 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 
-class RNN(nn.Module):
-	name = 'rnn'
+class RNN_0(nn.Module):
+	name = 'rnn_0'
 	def __init__(self, hidden_size=256, deep=False, lag=12):
-		super(RNN, self).__init__()
+		super(RNN_0, self).__init__()
 
 		self.lag = lag # temporal dimension
-		self.steps = 10 # spatial dimension (optional ?)
+		self.steps = 1 # spatial dimension (optional ?)
 		self.hidden_size = hidden_size
 
 		hsize = hidden_size
@@ -62,9 +62,9 @@ class RNN(nn.Module):
 		return output, hidden
 
 	def forward(self, inputs, hidden=None):
-		steps = len(inputs)
+		time_steps = len(inputs)
 
-		for ii in range(steps):
+		for ii in range(time_steps):
 			output, hidden = self.step(inputs[ii], hidden)
 			# outputs.append(output)
 		return output
@@ -76,8 +76,8 @@ class RNN(nn.Module):
 		return criterion, opt, sch
 
 	def format_batch(self, data, wrap=True):
-		known = data[:, :, :]
 		# raw   : batch x timelen x seqlen
+		known = data[:, :, 0:1]
 		data = torch.transpose(known, 1, 0)
 		# fmt   : timelen x batch x seqlen
 		timesteps = list(torch.split(data, 1, dim=0))
@@ -86,10 +86,6 @@ class RNN(nn.Module):
 			sequence.append(step.clone().to(self.device).float().squeeze(0))
 
 		Xs = sequence
-		# print(len(Xs), Xs[0].size())
 		Ys = data[-1, :, :].clone().to(self.device).float()
-		# print(len(Xs), Xs[0].size())
-		# print(Ys.size())
-		# assert False
 
 		return Xs, Ys

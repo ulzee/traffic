@@ -7,6 +7,7 @@ data
 spark
 *.json
 metadata
+scripts
 
 # C extensions
 *.so

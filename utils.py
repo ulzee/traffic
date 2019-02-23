@@ -67,7 +67,7 @@ def dedupe(segs):
 					covered['%d-%d' % (ti+jj, si+ii)] = True
 	return unique
 
-def evaluate(dset, model, crit, norm=1, result=False):
+def evaluate(dset, model, crit, result=False):
 	model.eval()
 	eval_losses = []
 	for bii, batch in enumerate(dset):
@@ -75,10 +75,10 @@ def evaluate(dset, model, crit, norm=1, result=False):
 		outputs = model(Xs)
 
 		loss = crit(outputs, Ys)
-		eval_losses.append(loss.item())
-		sys.stdout.write('eval:%d/%d L%.2f    \r' % (bii+1, len(dset), loss.item()))
+		eval_losses.append(loss)
+		sys.stdout.write('eval:%d/%d L%.2f    \r' % (bii+1, len(dset), loss))
 	sys.stdout.flush()
-	print('Eval loss:', norm * np.mean(eval_losses))
+	print('Eval loss: %.4f' % np.mean(eval_losses))
 	if result:
 		return np.mean(eval_losses)
 
@@ -102,3 +102,6 @@ def show_context(sample, draw=True):
 
 def hist_smooth(hist):
 	return np.array([blur(row, 2) for row in hist])
+
+def wape(_tens, tens, denom):
+	return 100 * np.mean(np.abs(_tens - tens) / denom)
