@@ -145,15 +145,18 @@ def show_eval(viewset, model, fmax):
 		plt.plot(xoffset, y_run)
 
 		# running fcast
-		y_cast = list(torch.split(data[:, :model.lag+1, :model.stops].to(model.device), 1, 1))
-		for f0 in xoffset:
-			din = torch.cat(y_cast[-model.lag-1:], dim=1)
-			Xs, Ys = model.format_batch(din)
-			yhat = model(Xs).unsqueeze(1)
-			y_cast.append(yhat)
-		y_cast = torch.cat(y_cast[model.lag+1:], dim=1)
-		plt.plot(xoffset, tonpy(y_cast.squeeze()))
+		lamount = model.lag+1
+		for f0 in range(lamount, data.size()[1], fmax):
+			dwindow = data[:, f0-lamount:f0, :model.stops]
+			y_cast = list(torch.split(dwindow.to(model.device), 1, 1))
+			for fi in range(fmax):
+				din = torch.cat(y_cast[-lamount:], dim=1)
+				Xs, Ys = model.format_batch(din)
+				yhat = model(Xs).unsqueeze(1)
+				y_cast.append(yhat)
+			y_cast = torch.cat(y_cast[lamount:], dim=1)
+			plt.plot(range(f0, f0+fmax), tonpy(y_cast.squeeze()), color='C2')
 
-		plt.legend(['running', 'forecast'])
+		plt.legend(['measured', 'running', 'forecast'])
 
 		plt.show(); plt.close()
