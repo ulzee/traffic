@@ -6,6 +6,11 @@ import numpy as np
 from configs import *
 from scipy.ndimage import gaussian_filter as blur
 
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import numpy as np
+
 segkey = lambda s1, s2: '%s-%s' % (s1, s2)
 
 def get_hist(sk):
@@ -41,8 +46,8 @@ def get_validity(sk):
 
 fileName = lambda raw: raw.split('/')[-1].split('.')[0]
 
-def history_byname(name, root='history', ext='npy'):
-	return np.load('data/%s/%s.%s' % (root, name, ext))
+def history_byname(name, root='data/history', ext='npy'):
+	return np.load('%s/%s.%s' % (root, name, ext))
 
 def show_travels(mat, recent=3):
 	import matplotlib.pyplot as plt
@@ -105,3 +110,50 @@ def hist_smooth(hist):
 
 def wape(_tens, tens, denom):
 	return 100 * np.mean(np.abs(_tens - tens) / denom)
+
+def mape(tens, _tens):
+	ls = []
+	for _y, y in zip(_tens, tens):
+		# print(_y, y)
+		if _y == 0:
+			continue
+		else:
+			ls.append(np.abs(_y - y) / _y)
+	assert len(ls)
+	return np.mean(ls) * 100
+
+def show_eval(viewset, model, fmax):
+	import matplotlib.pyplot as plt
+	# Xs, Ys = model.format_batch(viewset)
+
+	for data in viewset:
+		data = torch.Tensor(data).unsqueeze(0)
+
+		hist = tonpy(data.squeeze())
+		plt.figure(figsize=(14, 3))
+		plt.plot(hist[:, 0])
+
+		xoffset = range(model.lag+1, data.size()[1])
+		# running eval
+		y_run = []
+		for ti in xoffset:
+			din = data[:, ti-(model.lag+1):ti]
+			Xs, Ys = model.format_batch(din)
+			yhat = model(Xs)
+			y_run.append(tonpy(yhat.squeeze()))
+		y_run = np.array(y_run)
+		plt.plot(xoffset, y_run)
+
+		# running fcast
+		y_cast = list(torch.split(data[:, :model.lag+1, :model.stops].to(model.device), 1, 1))
+		for f0 in xoffset:
+			din = torch.cat(y_cast[-model.lag-1:], dim=1)
+			Xs, Ys = model.format_batch(din)
+			yhat = model(Xs).unsqueeze(1)
+			y_cast.append(yhat)
+		y_cast = torch.cat(y_cast[model.lag+1:], dim=1)
+		plt.plot(xoffset, tonpy(y_cast.squeeze()))
+
+		plt.legend(['running', 'forecast'])
+
+		plt.show(); plt.close()

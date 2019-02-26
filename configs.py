@@ -1,7 +1,7 @@
 
-DPATH = '/scratch/ua349/shiva-traffic/data'
+DPATH = '/home/ubuntu/traffic/data'
 ROUTES = 'stopcodes_sequence'
-SPEEDS = 'segments/avgspeeds-full-ts-xclude'
+SPEEDS = 'avgspeeds-full-ts-xclude'
 
 SAMPLE_ROUTES = [
 	'M102_0',
