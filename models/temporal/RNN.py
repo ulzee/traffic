@@ -6,47 +6,25 @@ import numpy as np
 
 class RNN(nn.Module):
 	name = 'rnn'
-	def __init__(self, hidden_size=256, deep=False, lag=12):
+	def __init__(self, hidden_size=256, steps=10):
 		super(RNN, self).__init__()
 
-		self.lag = lag # temporal dimension
-		self.steps = 10 # spatial dimension (optional ?)
+		self.lag = 5 # min needed for inference
+		self.steps = steps # spatial dimension (optional ?)
 		self.hidden_size = hidden_size
 
-		hsize = hidden_size
 		self.insize = self.steps
 		self.outsize = self.steps
-		if deep:
-			self.inp = nn.Sequential(
-				nn.Linear(self.insize, hsize),
-				nn.ReLU(),
-				nn.Linear(hsize, hsize),
-				nn.ReLU(),
-				nn.Linear(hsize, hsize),
-				nn.ReLU(),
-				# nn.Dropout(0.5),
-			)
-			self.out = nn.Sequential(
-				# nn.Dropout(0.5),
-				nn.ReLU(),
-				nn.Linear(hsize, hsize),
-				nn.ReLU(),
-				nn.Linear(hsize, hsize),
-				nn.ReLU(),
-				nn.Linear(hsize, self.outsize),
-			)
-		else:
-			self.name += '_short'
-			self.inp = nn.Sequential(
-				nn.Linear(self.insize, hsize),
-			)
-			self.out = nn.Sequential(
-				nn.Linear(hsize, self.outsize),
-			)
+
+		hsize = hidden_size
+		self.inp = nn.Sequential(
+			nn.Linear(self.insize, hsize),
+		)
+		self.out = nn.Sequential(
+			nn.Linear(hsize, self.outsize),
+		)
 
 		self.rnn = nn.LSTM(hidden_size, hidden_size, 1)
-		self.bsize = 32
-
 
 	def step(self, input, hidden=None):
 		# seqlen = 1 for stepwise eval
@@ -61,35 +39,41 @@ class RNN(nn.Module):
 		output = self.out(output.squeeze(0))
 		return output, hidden
 
-	def forward(self, inputs, hidden=None):
-		steps = len(inputs)
+	def forward(self, inputs, hidden=None, dump=False, wrap=True):
+		temporal = len(inputs)
 
-		for ii in range(steps):
+		outputs = []
+		for ii in range(temporal):
 			output, hidden = self.step(inputs[ii], hidden)
-			# outputs.append(output)
-		return output
+			outputs.append(output)
+
+		if wrap:
+			outputs = torch.stack(outputs, dim=1)
+
+		if not dump: return outputs
+		return outputs, hidden
 
 	def params(self, lr=0.001):
 		criterion = nn.MSELoss().cuda()
 		opt = optim.SGD(self.parameters(), lr=lr)
-		sch = optim.lr_scheduler.StepLR(opt, step_size=15, gamma=0.2)
+		sch = optim.lr_scheduler.StepLR(opt, step_size=15, gamma=0.5)
 		return criterion, opt, sch
 
-	def format_batch(self, data, wrap=True):
-		known = data[:, :, :]
+	def format_batch(self, data, withold=None):
+		known = data[:, :, :self.steps]
+
 		# raw   : batch x timelen x seqlen
 		data = torch.transpose(known, 1, 0)
 		# fmt   : timelen x batch x seqlen
-		timesteps = list(torch.split(data, 1, dim=0))
-		sequence = []
-		for ti, step in enumerate(timesteps[:-1]):
-			sequence.append(step.clone().to(self.device).float().squeeze(0))
 
-		Xs = sequence
-		# print(len(Xs), Xs[0].size())
-		Ys = data[-1, :, :].clone().to(self.device).float()
-		# print(len(Xs), Xs[0].size())
-		# print(Ys.size())
-		# assert False
+		bytime = list(torch.split(data, 1, dim=0))
+		seq = list(map(lambda tens: tens.to(self.device).float().squeeze(0), bytime))
+
+		Xs = seq[:-1]
+		Ys = seq[1:] # predict immediately following values
+
+		Xs = list(reversed(Xs))
+		Ys = list(reversed(Ys))
+		Ys = torch.stack(Ys, dim=1) # restack Ys by temporal
 
 		return Xs, Ys

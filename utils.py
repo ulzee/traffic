@@ -122,7 +122,7 @@ def mape(tens, _tens):
 	assert len(ls)
 	return np.mean(ls) * 100
 
-def show_eval(viewset, model, fmax, target=0):
+def show_eval(viewset, model, fmax=10, meval=None, test_lag=5, target=0):
 	import matplotlib.pyplot as plt
 	# Xs, Ys = model.format_batch(viewset)
 
@@ -134,19 +134,22 @@ def show_eval(viewset, model, fmax, target=0):
 		plt.figure(figsize=(14, 5))
 		plt.plot(hist[:, target])
 
-		xoffset = range(model.lag+1, data.size()[1])
+		xoffset = range(test_lag+1, data.size()[1])
 		# running eval
 		y_run = []
 		for ti in xoffset:
-			din = data[:, ti-(model.lag+1):ti]
+			din = data[:, ti-(test_lag+1):ti]
 			Xs, Ys = model.format_batch(din)
-			yhat = model(Xs)
+			if meval is not None:
+				yhat = meval(model, Xs)
+			else:
+				yhat = model(Xs)
 			y_run.append(tonpy(yhat[:, target]))
 		y_run = np.array(y_run)
 		plt.plot(xoffset, y_run)
 
 		# running fcast
-		lamount = model.lag+1
+		lamount = test_lag+1
 		for f0 in range(lamount, data.size()[1], fmax):
 			dwindow = data[:, f0-lamount:f0, :model.stops]
 			y_cast = list(torch.split(dwindow.to(model.device), 1, 1))
@@ -161,5 +164,51 @@ def show_eval(viewset, model, fmax, target=0):
 				tonpy(y_cast[:, :, target].squeeze()), color='C2')
 
 		plt.legend(['measured', 'running', 'forecast'])
+
+		plt.show(); plt.close()
+
+def show_eval_rnn(viewset, model, fmax=10, test_lag=5, target=0):
+	import matplotlib.pyplot as plt
+	# Xs, Ys = model.format_batch(viewset)
+
+	for data in viewset:
+		data = torch.Tensor(data).unsqueeze(0)
+
+		hist = tonpy(data.squeeze(0))
+		plt.figure(figsize=(14, 5))
+		plt.plot(hist[:, target])
+
+		xoffset = range(data.size()[1])
+		# running eval
+		y_run = []
+		hidden = None
+		for ti in xoffset:
+			din = data[:, ti]
+			Xs = [din.to(model.device).float()]
+
+			yhat, hidden = model(Xs, hidden=hidden, dump=True)
+
+			y_run.append(tonpy(yhat[:, -1, target]))
+		y_run = np.array(y_run)
+		plt.plot(xoffset, y_run)
+
+		# FIXME: RNN forecast
+		# # running fcast
+		# lamount = test_lag+1
+		# for f0 in range(lamount, data.size()[1], fmax):
+		# 	dwindow = data[:, f0-lamount:f0, :model.stops]
+		# 	y_cast = list(torch.split(dwindow.to(model.device), 1, 1))
+		# 	for fi in range(fmax):
+		# 		din = torch.cat(y_cast[-lamount:], dim=1)
+		# 		Xs, Ys = model.format_batch(din)
+		# 		yhat = model(Xs).unsqueeze(1)
+		# 		y_cast.append(yhat)
+		# 	y_cast = torch.cat(y_cast[lamount:], dim=1)
+		# 	plt.plot(
+		# 		range(f0, f0+fmax),
+		# 		tonpy(y_cast[:, :, target].squeeze()), color='C2')
+
+		# plt.legend(['measured', 'running', 'forecast'])
+		plt.legend(['measured', 'running'])
 
 		plt.show(); plt.close()
