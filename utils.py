@@ -122,16 +122,17 @@ def mape(tens, _tens):
 	assert len(ls)
 	return np.mean(ls) * 100
 
-def show_eval(viewset, model, fmax):
+def show_eval(viewset, model, fmax, target=0):
 	import matplotlib.pyplot as plt
 	# Xs, Ys = model.format_batch(viewset)
 
 	for data in viewset:
 		data = torch.Tensor(data).unsqueeze(0)
 
-		hist = tonpy(data.squeeze())
-		plt.figure(figsize=(14, 3))
-		plt.plot(hist[:, 0])
+		hist = tonpy(data.squeeze(0))
+		# print(hist.shape)
+		plt.figure(figsize=(14, 5))
+		plt.plot(hist[:, target])
 
 		xoffset = range(model.lag+1, data.size()[1])
 		# running eval
@@ -140,7 +141,7 @@ def show_eval(viewset, model, fmax):
 			din = data[:, ti-(model.lag+1):ti]
 			Xs, Ys = model.format_batch(din)
 			yhat = model(Xs)
-			y_run.append(tonpy(yhat.squeeze()))
+			y_run.append(tonpy(yhat[:, target]))
 		y_run = np.array(y_run)
 		plt.plot(xoffset, y_run)
 
@@ -155,7 +156,9 @@ def show_eval(viewset, model, fmax):
 				yhat = model(Xs).unsqueeze(1)
 				y_cast.append(yhat)
 			y_cast = torch.cat(y_cast[lamount:], dim=1)
-			plt.plot(range(f0, f0+fmax), tonpy(y_cast.squeeze()), color='C2')
+			plt.plot(
+				range(f0, f0+fmax),
+				tonpy(y_cast[:, :, target].squeeze()), color='C2')
 
 		plt.legend(['measured', 'running', 'forecast'])
 
