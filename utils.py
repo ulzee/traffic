@@ -132,11 +132,14 @@ def show_eval(viewset, model, fmax=10, meval=None, test_lag=5, target=0):
 		hist = tonpy(data.squeeze(0))
 		# print(hist.shape)
 		plt.figure(figsize=(14, 5))
-		plt.plot(hist[:, target])
+		for hi in range(hist.shape[1]):
+			plt.plot(hist[:, hi], color='#EEEEEE')
+		plt.plot(hist[:, target], color='C0')
 
 		xoffset = range(test_lag+1, data.size()[1])
 		# running eval
 		y_run = []
+		x_pos = []
 		for ti in xoffset:
 			din = data[:, ti-(test_lag+1):ti]
 			Xs, Ys = model.format_batch(din)
@@ -145,8 +148,10 @@ def show_eval(viewset, model, fmax=10, meval=None, test_lag=5, target=0):
 			else:
 				yhat = model(Xs)
 			y_run.append(tonpy(yhat[:, target]))
+			# y_run.append(tonpy(Ys[:, target]))
+			x_pos.append(ti-1)
 		y_run = np.array(y_run)
-		plt.plot(xoffset, y_run)
+		plt.plot(x_pos, y_run, color='C1')
 
 		# running fcast
 		lamount = test_lag+1
@@ -183,14 +188,14 @@ def show_eval_rnn(viewset, model, fmax=10, test_lag=5, target=0):
 		y_run = []
 		hidden = None
 		for ti in xoffset:
-			din = data[:, ti]
+			din = data[:, ti, :model.steps]
 			Xs = [din.to(model.device).float()]
 
 			yhat, hidden = model(Xs, hidden=hidden, dump=True)
 
 			y_run.append(tonpy(yhat[:, -1, target]))
 		y_run = np.array(y_run)
-		plt.plot(xoffset, y_run)
+		plt.plot(range(1, data.size()[1] + 1), y_run)
 
 		# FIXME: RNN forecast
 		# # running fcast

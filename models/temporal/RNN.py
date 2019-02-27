@@ -4,10 +4,10 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 
-class RNN(nn.Module):
+class RNN_MIN(nn.Module):
 	name = 'rnn'
 	def __init__(self, hidden_size=256, steps=10):
-		super(RNN, self).__init__()
+		super(RNN_MIN, self).__init__()
 
 		self.lag = 5 # min needed for inference
 		self.steps = steps # spatial dimension (optional ?)
@@ -72,8 +72,29 @@ class RNN(nn.Module):
 		Xs = seq[:-1]
 		Ys = seq[1:] # predict immediately following values
 
-		Xs = list(reversed(Xs))
-		Ys = list(reversed(Ys))
 		Ys = torch.stack(Ys, dim=1) # restack Ys by temporal
 
 		return Xs, Ys
+
+class RNN(RNN_MIN):
+	name = 'rnn'
+	def __init__(self, hidden_size=256, steps=10):
+		super(RNN, self).__init__(hidden_size, steps)
+
+		hsize = hidden_size
+		self.inp = nn.Sequential(
+			nn.Linear(self.insize, hsize),
+			nn.ReLU(),
+			nn.Linear(hsize, hsize),
+			nn.ReLU(),
+			nn.Linear(hsize, hsize),
+		)
+		self.out = nn.Sequential(
+			nn.Linear(hsize, hsize),
+			nn.ReLU(),
+			nn.Linear(hsize, hsize),
+			nn.ReLU(),
+			nn.Linear(hsize, self.outsize),
+		)
+
+		self.rnn = nn.LSTM(hidden_size, hidden_size, 1)
