@@ -123,7 +123,15 @@ def mape(tens, _tens):
 	assert len(ls)
 	return np.mean(ls) * 100
 
-def show_eval(viewset, model, fmax=10, meval=None, test_lag=5, target=0, norm=10):
+def lagdiff(many, lag=1):
+    diff = np.zeros((many.shape[0]-1, many.shape[1]))
+    for ti in range(many.shape[1]):
+        series = many[:, ti]
+        for ii in range(many.shape[0]-1):
+            diff[ii, ti] = series[ii+1] - series[ii]
+    return diff
+
+def show_eval(viewset, model, fmax=10, meval=None, test_lag=5, target=0, norm=10, diff=None):
 	import matplotlib.pyplot as plt
 	# Xs, Ys = model.format_batch(viewset)
 
@@ -134,7 +142,7 @@ def show_eval(viewset, model, fmax=10, meval=None, test_lag=5, target=0, norm=10
 		# print(hist.shape)
 		plt.figure(figsize=(14, 5))
 		for hi in range(hist.shape[1]):
-			plt.plot(hist[:, hi], color='#EEEEEE')
+			plt.plot(norm * hist[:, hi], color='#EEEEEE')
 		plt.plot(norm * hist[:, target], color='C0')
 
 		xoffset = range(test_lag+1, data.size()[1])
@@ -184,25 +192,25 @@ def show_eval_rnn(viewset, model, fmax=10, test_lag=5, target=0):
 		plt.figure(figsize=(14, 5))
 		plt.plot(hist[:, target])
 
-		chunk = 12
-		# chunked eval
-		xoffset = range(chunk, data.size()[1], chunk)
-		# running eval
-		y_chunks = []
-		x_chunks = []
-		hidden = None
-		for ti in xoffset:
-			din = data[:, ti-chunk:ti, :model.steps]
-			Xs, _ = model.format_batch(din)
+		# chunk = 12
+		# # chunked eval
+		# xoffset = range(chunk, data.size()[1], chunk)
+		# # running eval
+		# y_chunks = []
+		# x_chunks = []
+		# hidden = None
+		# for ti in xoffset:
+		# 	din = data[:, ti-chunk:ti, :model.steps]
+		# 	Xs, _ = model.format_batch(din)
 
-			yhat = model(Xs)
+		# 	yhat = model(Xs)
 
-			y_chunks.append(tonpy(yhat[0, :, target]))
-			# y_chunks.append(tonpy(Ys[0, :, target]))
-			x_chunks.append(list(range(ti-chunk + 1, ti)))
+		# 	y_chunks.append(tonpy(yhat[0, :, target]))
+		# 	# y_chunks.append(tonpy(Ys[0, :, target]))
+		# 	x_chunks.append(list(range(ti-chunk + 1, ti)))
 
-		for xc, yc in zip(x_chunks, y_chunks):
-			plt.plot(xc, yc, color='C1')
+		# for xc, yc in zip(x_chunks, y_chunks):
+		# 	plt.plot(xc, yc, color='C1')
 
 		xoffset = range(data.size()[1])
 		# running eval

@@ -123,6 +123,7 @@ class LocalRoute(Routes):
 		# index_file='min-data.json',
 		smooth=False,
 		norm=10,
+		diff=None,
 		device=None, verbose=False):
 
 		self.device = device
@@ -132,6 +133,7 @@ class LocalRoute(Routes):
 		self.lag = lag
 		self.stops = stops
 		self.norm = norm
+		self.diff = diff
 
 		t0 = time()
 		if meta_path is None:
@@ -177,6 +179,9 @@ class LocalRoute(Routes):
 		if self.smooth:
 			hist = hist_smooth(hist)
 
+		if self.diff is not None:
+			hist = lagdiff(hist, lag=self.diff)
+
 		if self.norm is not None:
 			hist = hist.copy() / self.norm
 
@@ -206,6 +211,7 @@ class SingleStop(LocalRoute):
 		min_stride=1,
 		smooth=False,
 		norm=10,
+		diff=None,
 		device=None, verbose=True):
 
 		super().__init__(
@@ -218,6 +224,7 @@ class SingleStop(LocalRoute):
 			min_stride,
 			smooth,
 			norm,
+			diff,
 			device, verbose)
 
 		self.refs = []
