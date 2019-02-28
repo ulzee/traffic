@@ -72,7 +72,7 @@ def dedupe(segs):
 					covered['%d-%d' % (ti+jj, si+ii)] = True
 	return unique
 
-def evaluate(dset, model, crit, result=False):
+def evaluate(dset, model, crit, result=False, norm=10):
 	model.eval()
 	eval_losses = []
 	for bii, batch in enumerate(dset):
@@ -80,6 +80,7 @@ def evaluate(dset, model, crit, result=False):
 		outputs = model(Xs)
 
 		loss = crit(outputs, Ys)
+		loss *= norm**2
 		eval_losses.append(loss)
 		sys.stdout.write('eval:%d/%d L%.2f    \r' % (bii+1, len(dset), loss))
 	sys.stdout.flush()
@@ -122,7 +123,7 @@ def mape(tens, _tens):
 	assert len(ls)
 	return np.mean(ls) * 100
 
-def show_eval(viewset, model, fmax=10, meval=None, test_lag=5, target=0):
+def show_eval(viewset, model, fmax=10, meval=None, test_lag=5, target=0, norm=10):
 	import matplotlib.pyplot as plt
 	# Xs, Ys = model.format_batch(viewset)
 
@@ -134,7 +135,7 @@ def show_eval(viewset, model, fmax=10, meval=None, test_lag=5, target=0):
 		plt.figure(figsize=(14, 5))
 		for hi in range(hist.shape[1]):
 			plt.plot(hist[:, hi], color='#EEEEEE')
-		plt.plot(hist[:, target], color='C0')
+		plt.plot(norm * hist[:, target], color='C0')
 
 		xoffset = range(test_lag+1, data.size()[1])
 		# running eval
@@ -151,7 +152,7 @@ def show_eval(viewset, model, fmax=10, meval=None, test_lag=5, target=0):
 			# y_run.append(tonpy(Ys[:, target]))
 			x_pos.append(ti-1)
 		y_run = np.array(y_run)
-		plt.plot(x_pos, y_run, color='C1')
+		plt.plot(x_pos, norm * y_run, color='C1')
 
 		# running fcast
 		lamount = test_lag+1
@@ -166,7 +167,7 @@ def show_eval(viewset, model, fmax=10, meval=None, test_lag=5, target=0):
 			y_cast = torch.cat(y_cast[lamount:], dim=1)
 			plt.plot(
 				range(f0, f0+fmax),
-				tonpy(y_cast[:, :, target].squeeze()), color='C2')
+				norm * tonpy(y_cast[:, :, target].squeeze()), color='C2')
 
 		plt.legend(['measured', 'running', 'forecast'])
 
@@ -183,6 +184,26 @@ def show_eval_rnn(viewset, model, fmax=10, test_lag=5, target=0):
 		plt.figure(figsize=(14, 5))
 		plt.plot(hist[:, target])
 
+		chunk = 12
+		# chunked eval
+		xoffset = range(chunk, data.size()[1], chunk)
+		# running eval
+		y_chunks = []
+		x_chunks = []
+		hidden = None
+		for ti in xoffset:
+			din = data[:, ti-chunk:ti, :model.steps]
+			Xs, _ = model.format_batch(din)
+
+			yhat = model(Xs)
+
+			y_chunks.append(tonpy(yhat[0, :, target]))
+			# y_chunks.append(tonpy(Ys[0, :, target]))
+			x_chunks.append(list(range(ti-chunk + 1, ti)))
+
+		for xc, yc in zip(x_chunks, y_chunks):
+			plt.plot(xc, yc, color='C1')
+
 		xoffset = range(data.size()[1])
 		# running eval
 		y_run = []
@@ -195,7 +216,7 @@ def show_eval_rnn(viewset, model, fmax=10, test_lag=5, target=0):
 
 			y_run.append(tonpy(yhat[:, -1, target]))
 		y_run = np.array(y_run)
-		plt.plot(range(1, data.size()[1] + 1), y_run)
+		plt.plot(range(1, data.size()[1] + 1), y_run, color='red')
 
 		# FIXME: RNN forecast
 		# # running fcast

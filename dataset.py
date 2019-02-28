@@ -122,7 +122,8 @@ class LocalRoute(Routes):
 		min_stride=1,
 		# index_file='min-data.json',
 		smooth=False,
-		device=None):
+		norm=10,
+		device=None, verbose=False):
 
 		self.device = device
 		self.bsize = bsize
@@ -130,6 +131,7 @@ class LocalRoute(Routes):
 		self.smooth = smooth
 		self.lag = lag
 		self.stops = stops
+		self.norm = norm
 
 		t0 = time()
 		if meta_path is None:
@@ -139,9 +141,9 @@ class LocalRoute(Routes):
 			meta = [json.load(fl)]
 		self.meta = meta
 
-		print('Locals dataset: %s (%s)' % (mode, fpath))
-		print(' [*] Loaded routes:', len(meta), '(%.2fs)' % (time() - t0))
-		print(' [*] Has trainable inds:', len(meta[0]['trainable']))
+		if verbose: print('Locals dataset: %s (%s)' % (mode, fpath))
+		if verbose: print(' [*] Loaded routes:', len(meta), '(%.2fs)' % (time() - t0))
+		if verbose: print(' [*] Has trainable inds:', len(meta[0]['trainable']))
 
 		self.refs = []
 		split_ind = int(13248 * local_split)
@@ -158,13 +160,13 @@ class LocalRoute(Routes):
 						last_t = ti
 
 		assert len(meta)
-		print(' [*] Subset %s: %d' % (mode, len(self.refs)))
+		if verbose: print(' [*] Subset %s: %d' % (mode, len(self.refs)))
 
 		if mode == 'train':
 			npshuff(self.refs)
 		self.ind = 0
 		self.mat = np.load('data/history/%s.npy' % (local))
-		self.maxval=40
+		self.maxval=20
 
 	def __getitem__(self, index):
 		ref = self.refs[index]
@@ -174,6 +176,10 @@ class LocalRoute(Routes):
 		hist[hist > self.maxval] = self.maxval
 		if self.smooth:
 			hist = hist_smooth(hist)
+
+		if self.norm is not None:
+			hist = hist.copy() / self.norm
+
 		return hist
 
 	def __len__(self):
@@ -199,7 +205,8 @@ class SingleStop(LocalRoute):
 		meta_path=None,
 		min_stride=1,
 		smooth=False,
-		device=None):
+		norm=10,
+		device=None, verbose=True):
 
 		super().__init__(
 			local,
@@ -207,7 +214,11 @@ class SingleStop(LocalRoute):
 			lag,
 			stops,
 			local_split,
-			meta_path, smooth, device)
+			meta_path,
+			min_stride,
+			smooth,
+			norm,
+			device, verbose)
 
 		self.refs = []
 		split_ind = int(13248 * local_split)
@@ -226,7 +237,7 @@ class SingleStop(LocalRoute):
 						last_t = ti
 					# self.refs.append([route['name']] + pair)
 
-		print(' [*] Subset in Stop-%d: %d' % (stop_ind, len(self.refs)))
+		if verbose: print(' [*] Subset in Stop-%d: %d' % (stop_ind, len(self.refs)))
 
 		if mode == 'train':
 			npshuff(self.refs)
