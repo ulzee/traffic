@@ -250,6 +250,129 @@ class SingleStop(LocalRoute):
 			npshuff(self.refs)
 		self.ind = 0
 
+		with open('data/stopcodes_sequence/%s.txt' % local) as fl:
+			stops = fl.read().split('\n')
+		segid = '%s-%s' % (stops[stop_ind], stops[stop_ind+1])
+		with open('data/avgspeeds-full-ts-xclude/%s/%s.csv' % (segid[0], segid)) as fl:
+			lines = fl.read().split('\n')[1:]
+		lines = filter(lambda ent: ent, lines)
+		lines = map(lambda ent: ent.split(',')[1], lines)
+		avgspeeds = [float(ln) if ln != '' else np.nan for ln in lines]
+		self.avgdata = np.array(avgspeeds)
+		# self.avgdata =
+
+class SpotHistory(data.Dataset):
+	def __init__(self,
+			segments,
+			mode, bsize,
+			lag=6,
+			res=10,
+			data_path='/home/ubuntu/datasets-aux/mta/parsed',
+			data_post='s',
+			split=0.8,
+			norm=10,
+			verbose=True,
+		):
+
+		self.segments = segments
+		self.mode = mode
+		self.bsize = bsize
+		self.lag = lag
+		self.norm = norm
+		self.res = res
+
+		byday = {}
+		byseg = []
+		for segname in segments:
+			smatch = '%s/%s%02d_%s_*.json' % (data_path, data_post, res, segname)
+			dfiles = sorted(glob(smatch))
+			assert len(dfiles)
+
+			for dname in dfiles:
+				day = dname.split('_')[-1].replace('.json', '')
+				if day not in byday: byday[day] = []
+				byday[day].append(dname)
+			byseg.append(dfiles)
+
+		all_avail = []
+		for day, gathered in byday.items():
+			if len(gathered) < len(segments):
+				continue
+			all_avail.append([day, gathered])
+
+		# gather the raw speeds per day
+		for ii, (day, gathered) in enumerate(all_avail):
+			vlists = []
+			for seg_name_day in gathered:
+				with open(seg_name_day) as fl:
+					ls = json.load(fl)
+				vlists.append(ls)
+			all_avail[ii].append(vlists)
+
+		# align the speeds
+		self.data = []
+		for ii, (day, gathered, vlists) in enumerate(all_avail):
+			t0 = s2d(vlists[0][0]['time'])
+			tf = s2d(vlists[0][-1]['time'])
+
+			for segvs in vlists:
+				if s2d(segvs[0]['time']) > t0:
+					t0 = s2d(segvs[0]['time'])
+				if s2d(segvs[-1]['time']) < tf:
+					tf = s2d(segvs[-1]['time'])
+
+			dt = tf - t0
+			tsteps = dt.seconds // (60 * res) + 1
+			vmat = np.zeros((tsteps, len(vlists)))
+
+			for si, segvs in enumerate(vlists):
+				# seek until t0 begins
+				ind = 0
+				while s2d(segvs[ind]['time']) < t0:
+					ind += 1
+
+				vs = np.array(tfill(segvs, res))
+				vs /= norm
+				vmat[:, si] = vs[ind:ind+tsteps]
+			self.data.append(vmat)
+
+		# tsplit = int(len(dfiles) * split)
+		# self.data = data[:tsplit] if mode == 'train' else data[tsplit:]
+
+		# self.core_data = self.data
+		# if lag is not None:
+		# 	stride = 1
+		# 	# stride = lag//2
+		# 	self.data = []
+		# 	for series in self.core_data:
+		# 		for ti in range(lag, len(series), stride):
+		# 			seg = series[ti-lag:ti]
+		# 			self.data.append(seg)
+
+		if verbose:
+			avglen = lambda series: np.mean([len(seq) for seq in series])
+			print('Full history' if lag is None else 'Chunks (lag %d)' % lag)
+			# print(' [*] Files found:', len(dfiles))
+			print(' [*] Segments: %d co-avail' % len(all_avail))
+			for segname, ls in zip(segments, byseg):
+				print('    * [%s]: %d' % (segname, len(ls)))
+
+			# print(' [*] %s-set size:' % mode, len(self.data))
+			# print(' [*] avg sequence: %.2f' % )
+
+
+	def __len__(self):
+		return len(self.data)
+
+	def __getitem__(self, index):
+		return self.data[index]
+
+	def generator(self, shuffle=True):
+		return data.DataLoader(self,
+			batch_size=self.bsize,
+			shuffle=shuffle,
+			num_workers=2)
+
 if __name__ == '__main__':
 	dset = Routes(bsize=32, index_file='min-data.json')
 
