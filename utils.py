@@ -85,8 +85,8 @@ def evaluate(dset, model, crit, result=False, norm=10):
 		sys.stdout.write('eval:%d/%d L%.2f    \r' % (bii+1, len(dset), loss))
 	sys.stdout.flush()
 	print('Eval loss: %.4f' % np.mean(eval_losses))
-	if result:
-		return np.mean(eval_losses)
+	# if result:
+	return np.mean(eval_losses)
 
 def high_integ(sample):
 	row_integs = []
@@ -131,19 +131,20 @@ def lagdiff(many, lag=1):
 			diff[ii, ti] = series[ii+1] - series[ii]
 	return diff
 
-def show_eval(viewset, model, fmax=10, meval=None, test_lag=5, target=0, norm=10, diff=None):
+def eval_lin(viewset, model, fmax=10, meval=None, test_lag=5, target=0, norm=10, diff=None, plot=True):
 	import matplotlib.pyplot as plt
 	# Xs, Ys = model.format_batch(viewset)
 
+	mses = []
 	for data in viewset:
 		data = torch.Tensor(data).unsqueeze(0)
 
 		hist = tonpy(data.squeeze(0))
 		# print(hist.shape)
-		plt.figure(figsize=(14, 5))
+		if plot: plt.figure(figsize=(14, 5))
 		for hi in range(hist.shape[1]):
-			plt.plot(norm * hist[:, hi], color='#EEEEEE')
-		plt.plot(norm * hist[:, target], color='C0')
+			if plot: plt.plot(norm * hist[:, hi], color='#EEEEEE')
+		if plot: plt.plot(norm * hist[:, target], color='C0')
 
 		xoffset = range(test_lag+1, data.size()[1])
 		# running eval
@@ -160,7 +161,7 @@ def show_eval(viewset, model, fmax=10, meval=None, test_lag=5, target=0, norm=10
 			# y_run.append(tonpy(Ys[:, target]))
 			x_pos.append(ti-1)
 		y_run = np.array(y_run)
-		plt.plot(x_pos, norm * y_run, color='C1')
+		if plot: plt.plot(x_pos, norm * y_run, color='C1')
 
 		# running fcast
 		lamount = test_lag+1
@@ -173,25 +174,36 @@ def show_eval(viewset, model, fmax=10, meval=None, test_lag=5, target=0, norm=10
 				yhat = model(Xs).unsqueeze(1)
 				y_cast.append(yhat)
 			y_cast = torch.cat(y_cast[lamount:], dim=1)
-			plt.plot(
+			if plot: plt.plot(
 				range(f0, f0+fmax),
 				norm * tonpy(y_cast[:, :, target].squeeze()), color='C2')
 
-		plt.legend(['measured', 'running', 'forecast'])
-		plt.ylim(-3, 35)
+		if plot: plt.legend(['measured', 'running', 'forecast'])
+		# if plot: plt.ylim(-3, 35)
 
-		plt.show(); plt.close()
 
-def show_eval_rnn(viewset, model, fmax=10, test_lag=5, target=0):
+		ytrue = hist[test_lag+1:, target][1:]
+		yguess = y_run[:-1, 0]
+		diff = (ytrue - yguess) * norm
+		diff = diff ** 2
+		mses += diff.tolist()
+
+		if plot:
+			plt.title('%.4f' % np.mean(diff))
+			plt.show(); plt.close()
+	return mses
+
+def eval_rnn(viewset, model, fmax=10, test_lag=5, target=0, norm=10, plot=True, xfmt=None):
 	import matplotlib.pyplot as plt
 	# Xs, Ys = model.format_batch(viewset)
 
+	losses = []
 	for data in viewset:
 		data = torch.Tensor(data).unsqueeze(0)
 
 		hist = tonpy(data.squeeze(0))
-		plt.figure(figsize=(14, 5))
-		plt.plot(hist[:, target])
+		if plot: plt.figure(figsize=(14, 5))
+		if plot: plt.plot(hist[:, target] * norm)
 
 		# chunk = 12
 		# # chunked eval
@@ -211,7 +223,7 @@ def show_eval_rnn(viewset, model, fmax=10, test_lag=5, target=0):
 		# 	x_chunks.append(list(range(ti-chunk + 1, ti)))
 
 		# for xc, yc in zip(x_chunks, y_chunks):
-		# 	plt.plot(xc, yc, color='C1')
+		# 	if plot: plt.plot(xc, yc, color='C1')
 
 		xoffset = range(data.size()[1])
 		# running eval
@@ -219,13 +231,16 @@ def show_eval_rnn(viewset, model, fmax=10, test_lag=5, target=0):
 		hidden = None
 		for ti in xoffset:
 			din = data[:, ti, :model.steps]
-			Xs = [din.to(model.device).float()]
+			if xfmt is not None:
+				Xs = xfmt(din)
+			else:
+				Xs = [din.to(model.device).float()]
 
 			yhat, hidden = model(Xs, hidden=hidden, dump=True)
 
 			y_run.append(tonpy(yhat[:, -1, target]))
 		y_run = np.array(y_run)
-		plt.plot(range(1, data.size()[1] + 1), y_run, color='red')
+		if plot: plt.plot(range(1, data.size()[1] + 1), y_run * norm, color='red')
 
 		# FIXME: RNN forecast
 		# # running fcast
@@ -239,14 +254,22 @@ def show_eval_rnn(viewset, model, fmax=10, test_lag=5, target=0):
 		# 		yhat = model(Xs).unsqueeze(1)
 		# 		y_cast.append(yhat)
 		# 	y_cast = torch.cat(y_cast[lamount:], dim=1)
-		# 	plt.plot(
+		# 	if plot: plt.plot(
 		# 		range(f0, f0+fmax),
 		# 		tonpy(y_cast[:, :, target].squeeze()), color='C2')
 
-		# plt.legend(['measured', 'running', 'forecast'])
-		plt.legend(['measured', 'running'])
+		# if plot: plt.legend(['measured', 'running', 'forecast'])
+		if plot: plt.legend(['measured', 'running'])
 
-		plt.show(); plt.close()
+
+		diff = (hist[:, target][1:] - y_run[:-1, 0]) * norm
+		diff = diff ** 2
+		if plot:
+			plt.title('%.4f' % np.mean(diff))
+			plt.show(); plt.close()
+		losses += diff.tolist()
+	return losses
+		# print(len(hist[:, target]), len(y_run))
 
 from time import time, strptime, mktime
 
@@ -581,16 +604,19 @@ def seg_scatter(ls, st, ed, title='', tail=None, tints=[1, 2, 5, 10]):
 		avail = len(bts) / (trange / 60 / tr) * 100
 		bavail.append('%.1f%%' % avail)
 
-	with open('%s/%s/%s/%s-%s.csv' % (DPATH, SPEEDS, st[0], st, ed)) as fl:
-		lines = fl.read().split('\n')[1:-1]
-	lines = [ent.split(',') for ent in lines]
-	olddata = [(datetime.strptime(ent[0], '%Y-%m-%d %H:%M:%S'), ent[1]) for ent in lines]
-	oldInRange = [ent for ent in olddata if ent[0] >= flat[0][0] and ent[0] <= flat[-1][0]]
-	oldRaw = [(mktime(ent[0].timetuple()), ent[1]) for ent in oldInRange]
-	oldRaw = [(ent[0], float(ent[1])) for ent in oldRaw if ent[1] is not '']
-	ots, ovs = zip(*oldRaw)
-	pp = plt.plot(ots, np.array(ovs) * MMPH, color='red')
-	plots.append(pp[0])
+	try:
+		with open('%s/%s/%s/%s-%s.csv' % (DPATH, SPEEDS, st[0], st, ed)) as fl:
+			lines = fl.read().split('\n')[1:-1]
+		lines = [ent.split(',') for ent in lines]
+		olddata = [(datetime.strptime(ent[0], '%Y-%m-%d %H:%M:%S'), ent[1]) for ent in lines]
+		oldInRange = [ent for ent in olddata if ent[0] >= flat[0][0] and ent[0] <= flat[-1][0]]
+		oldRaw = [(mktime(ent[0].timetuple()), ent[1]) for ent in oldInRange]
+		oldRaw = [(ent[0], float(ent[1])) for ent in oldRaw if ent[1] is not '']
+		ots, ovs = zip(*oldRaw)
+		pp = plt.plot(ots, np.array(ovs) * MMPH, color='red')
+		plots.append(pp[0])
+	except:
+		print('Kdd data not found.')
 
 	plt.legend(plots, ['%dm' % ival for ival in tints] + ['kdd'])
 	# print(oldInRange)

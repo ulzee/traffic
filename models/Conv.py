@@ -9,71 +9,71 @@ import os, sys
 
 class Conv(nn.Module):
 	name = 'conv'
-	def __init__(self, hidden_size=256, lag=5, stops=5):
+	def __init__(self, hidden_size=256, lag=6, stops=5):
 		super(Conv, self).__init__()
 
 		self.lag = lag
 		self.hidden_size = hidden_size
 		self.stops = stops
 
-		self.conv_s = nn.Sequential(
-			nn.Conv1d(1, 64, 3, padding=1),
+		self.conv_t = nn.Sequential(
+			nn.Conv1d(1, 256, 3, padding=1),
 			nn.ReLU(),
-			nn.Conv1d(64, 128, 3, padding=1),
-			nn.ReLU(),
-			# nn.Conv1d(128, 256, 3, stride=2, padding=1),
-			nn.Conv1d(128, 256, 3),
-			nn.ReLU(),
+			# nn.Conv1d(64, 128, 3, padding=1),
+			# nn.ReLU(),
+			# nn.Conv1d(128, 256, 3, padding=1),
+			# nn.ReLU(),
+			# nn.Conv1d(256, 256, 3, padding=1),
+			# nn.ReLU(),
+			nn.MaxPool1d(2),
 
 			nn.Conv1d(256, 256, 3, padding=1),
 			nn.ReLU(),
-			nn.Conv1d(256, 256, 3),
+			nn.Conv1d(256, 256, 3, padding=1),
 			nn.ReLU(),
-
-			# nn.Conv1d(128, 128, 3, padding=1),
+			nn.MaxPool1d(2, stride=1),
+			# nn.Conv1d(256, 256, 3),
+			nn.ReLU(),
+			# nn.Conv1d(256, 1, 1),
 			# nn.ReLU(),
-			# nn.Conv1d(128, 128, 3, padding=1),
+			# nn.Conv1d(256, 256, 3),
 			# nn.ReLU(),
 		)
 
-		self.conv_t = nn.Sequential(
-			nn.Conv1d(256, 256, 3, padding=1),
+		self.dense = nn.Sequential(
+			nn.Linear(2 * 256, 256),
 			nn.ReLU(),
-			nn.Conv1d(256, 256, 3, padding=1),
+			nn.Linear(256, 256),
 			nn.ReLU(),
-			nn.Conv1d(256, 128, 3, padding=1),
-			nn.ReLU(),
-			nn.Conv1d(128, 1, 3, padding=1),
-			# nn.Conv1d(256, 256, 3, padding=1),
-			# nn.ReLU(),
-			# nn.Conv1d(256, 256, 3, padding=1),
-			# nn.ReLU(),
-
-			# nn.Conv1d(128, 128, 3, padding=1),
-			# nn.ReLU(),
-			# nn.Conv1d(128, 128, 3, padding=1),
-			# nn.ReLU(),
+			nn.Linear(256, self.stops),
 		)
 
 	def forward(self, inputs, hidden=None):
 		# in: time x batch x seqlen
-		# print(inputs.size())
 
-		bytime = list(torch.split(inputs, 1, 1))
+		# bytime = list(torch.split(inputs, 1, 1))
+		bystop = list(torch.split(inputs, 1, 2))
 
-		sdim = []
-		for si, svect  in enumerate(bytime):
-			sout = self.conv_s(svect)
-			sdim.append(sout)
-		# print(len(sdim))
-		# print(sdim[0].size())
-		stv = torch.stack(sdim, dim=1)
-		stv = torch.transpose(stv.squeeze(-1), 1, 2)
+		out = self.conv_t(torch.transpose(bystop[0], 1, 2))
+		out = self.dense(out.view(-1, 2 * 256))
+		# out = out.squeeze(2)
+		return out
+		# sdim = []
+		# for si, svect  in enumerate(bytime):
+		# 	sout = self.conv_s(svect)
+		# 	sdim.append(sout)
+		# out: convolutions among neighbors
+
+		# stv = torch.cat(sdim, dim=1)
+		# stv = torch.transpose(stv.squeeze(-1), 1, 2)
 		# print(stv.size())
 
-		tdim = self.conv_t(stv)
+		# tdim = self.conv_t(stv)
 		# print(tdim.size())
-		out = tdim.squeeze(1)
+		# out = tdim.squeeze(1)
+		# out = self.dense(stv.view(-1, 256))
+		# out = self.dense(tdim.squeeze(2))
+		# print(out.size())
 		# assert False
 		return out
 

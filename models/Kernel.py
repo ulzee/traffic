@@ -11,6 +11,7 @@ class Kernel(nn.Module):
 			insize=2, # self + 1 neighbor (default)
 			hsize=64, # size of embedding vector
 			iterations=5,
+			shared_msgop=True,
 		):
 
 		super(Kernel, self).__init__()
@@ -20,7 +21,7 @@ class Kernel(nn.Module):
 
 		def inst_msgop():
 			msg_out = nn.Sequential(
-				nn.Linear(1 + hsize, hsize)
+				nn.Linear((1 + hsize) * 2, hsize)
 			)
 			return nn.ModuleList([msg_out])
 
@@ -29,8 +30,14 @@ class Kernel(nn.Module):
 		self.mops = nn.ModuleList()
 		for iter in range(iterations):
 			at_iter = nn.ModuleList()
+
+			# msgop is shared to all neighbors under this iteration
+			msgop = inst_msgop() if shared_msgop else None
 			for _ in range(insize):
-				at_iter.append(inst_msgop())
+				if not shared_msgop:
+					msgop = inst_msgop()
+				assert msgop is not None
+				at_iter.append(msgop)
 			self.mops.append(at_iter)
 		assert len(self.mops) == iterations
 
@@ -41,9 +48,7 @@ class Kernel(nn.Module):
 		rel_nodes = node.ns
 		mops = self.mops[iteration]
 		for (msg_out,), other in zip(mops, rel_nodes):
-			# inp = torch.cat([other.v.detach(), other.h.detach()], dim=1)
-			inp = torch.cat([other.v, other.h], dim=1)
-			# inp = other.v
+			inp = torch.cat([node.v, node.h, other.v, other.h], dim=1)
 			mix = msg_out(inp)
 			msgs.append(mix)
 
@@ -65,11 +70,13 @@ class Update(nn.Module):
 			nn.Linear(hsize, 1)
 		)
 		self.h_out = nn.Sequential(
+			nn.Linear(2* hsize, hsize),
+			nn.ReLU(),
 			nn.Linear(hsize, hsize)
 		)
 		# in: seqlen x batch x features
 		self.rnn = nn.Sequential(
-			nn.Linear(hsize, hsize),
+			nn.Linear(2 * hsize, hsize),
 			nn.ReLU(),
 			nn.Linear(hsize, hsize)
 		)
@@ -78,12 +85,11 @@ class Update(nn.Module):
 		assert type(node.msg) is not type(None)
 		mix = node.msg
 		node.msg = None
-		mix = self.rnn(mix)
 
-		# h and v are updated
-		node.v = self.v_out(mix)
+		mix = torch.cat([node.h, mix], dim=1)
 		node.h = self.h_out(mix)
-		return node.v
+
+		return node.h
 
 class TimeStep(nn.Module):
 	def __init__(self, hsize=64):
@@ -98,8 +104,8 @@ class TimeStep(nn.Module):
 		# in: seqlen x batch x features
 		self.rnn = nn.LSTM(hsize, hsize, 1)
 		self.v_out = nn.Sequential(
-			nn.Linear(hsize, hsize),
-			nn.ReLU(),
+			# nn.Linear(hsize, hsize),
+			# nn.ReLU(),
 			nn.Linear(hsize, 1)
 		)
 		# self.h_out = nn.Sequential(
@@ -109,12 +115,12 @@ class TimeStep(nn.Module):
 	def forward(self, node):
 		# inp = node.h
 		inp = self.h_in(node.h)
-
 		mix = inp
+
 		# mix, node.hidden = self.rnn(inp.unsqueeze(0), node.hidden)
 		# mix = mix.squeeze(0)
 		node.v = self.v_out(mix)
-
+		# assert False
 		return node.v
 
 class Node:
@@ -211,7 +217,7 @@ def reassign_v(states, graph_t):
 	while len(ls):
 		n1, n2 = ls[0]
 		ls = ls[1:]
-		n1.v = n2._v.clone()
+		n1._v = n2._v.clone() # update the target label
 		for c1, c2 in zip(n1.ns, n2.ns):
 			ls.append((c1, c2))
 

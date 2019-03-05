@@ -261,6 +261,8 @@ class SingleStop(LocalRoute):
 		self.avgdata = np.array(avgspeeds)
 		# self.avgdata =
 
+from scipy.ndimage.filters import gaussian_filter1d as blur1d
+
 class SpotHistory(data.Dataset):
 	def __init__(self,
 			segments,
@@ -270,13 +272,16 @@ class SpotHistory(data.Dataset):
 			data_path='/home/ubuntu/datasets-aux/mta/parsed',
 			data_post='s',
 			split=0.8,
+			smooth=1.5,
 			norm=10,
+			shuffle=True,
 			verbose=True,
 		):
 
 		self.segments = segments
 		self.mode = mode
 		self.bsize = bsize
+		self.shuffle = shuffle
 		self.lag = lag
 		self.norm = norm
 		self.res = res
@@ -295,7 +300,8 @@ class SpotHistory(data.Dataset):
 			byseg.append(dfiles)
 
 		all_avail = []
-		for day, gathered in byday.items():
+		for day in sorted(list(byday.keys())):
+			gathered = byday[day]
 			if len(gathered) < len(segments):
 				continue
 			all_avail.append([day, gathered])
@@ -310,7 +316,7 @@ class SpotHistory(data.Dataset):
 			all_avail[ii].append(vlists)
 
 		# align the speeds
-		self.data = []
+		self.rawdata = []
 		for ii, (day, gathered, vlists) in enumerate(all_avail):
 			t0 = s2d(vlists[0][0]['time'])
 			tf = s2d(vlists[0][-1]['time'])
@@ -332,22 +338,26 @@ class SpotHistory(data.Dataset):
 					ind += 1
 
 				vs = np.array(tfill(segvs, res))
+				if smooth is not None:
+					vs = blur1d(vs, sigma=smooth)
 				vs /= norm
 				vmat[:, si] = vs[ind:ind+tsteps]
-			self.data.append(vmat)
+			self.rawdata.append(vmat)
+		self.data = self.rawdata
 
-		# tsplit = int(len(dfiles) * split)
-		# self.data = data[:tsplit] if mode == 'train' else data[tsplit:]
+		tsplit = int(len(self.data) * split)
+		self.data = self.data[:tsplit] if mode == 'train' else self.data[tsplit:]
 
-		# self.core_data = self.data
-		# if lag is not None:
-		# 	stride = 1
-		# 	# stride = lag//2
-		# 	self.data = []
-		# 	for series in self.core_data:
-		# 		for ti in range(lag, len(series), stride):
-		# 			seg = series[ti-lag:ti]
-		# 			self.data.append(seg)
+		if lag is not None:
+			stride = 1
+			self.data = []
+			for series in self.rawdata:
+				for ti in range(lag, len(series), stride):
+					seg = series[ti-lag:ti]
+					self.data.append(seg)
+
+		if shuffle:
+			npshuff(self.data)
 
 		if verbose:
 			avglen = lambda series: np.mean([len(seq) for seq in series])
@@ -356,6 +366,7 @@ class SpotHistory(data.Dataset):
 			print(' [*] Segments: %d co-avail' % len(all_avail))
 			for segname, ls in zip(segments, byseg):
 				print('    * [%s]: %d' % (segname, len(ls)))
+			print(' [*] Examples (%s): %d' % (mode, len(self.data)))
 
 			# print(' [*] %s-set size:' % mode, len(self.data))
 			# print(' [*] avg sequence: %.2f' % )

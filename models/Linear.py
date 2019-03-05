@@ -14,7 +14,7 @@ class Linear(nn.Module):
 		self.stops = stops
 
 		self.op = nn.Linear(
-			self.lag * self.lag,
+			self.lag * self.stops,
 			self.stops)
 
 	def forward(self, inputs, hidden=None):
