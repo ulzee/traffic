@@ -12,16 +12,12 @@ class GRNN(nn.Module):
 
 	def __init__(self,
 		nodes=1,
-		hidden_size=256, steps=10,
+		hidden_size=256,
 		rnnmdl=RNN_MIN):
 		super(GRNN, self).__init__()
 
 		self.lag = 5 # min needed for inference
-		self.steps = steps # spatial dimension (optional ?)
 		self.hidden_size = hidden_size
-
-		self.insize = self.steps
-		self.outsize = self.steps
 
 		many_rnns = [rnnmdl(hidden_size, 1) for _ in range(nodes)]
 		self.rnns = nn.ModuleList(many_rnns)
@@ -48,7 +44,7 @@ class GRNN(nn.Module):
 		return criterion, opt, sch
 
 	def format_batch(self, data, withold=None):
-		all_known = data[:, :, :self.steps]
+		all_known = data[:, :, :]
 
 		bystop = torch.split(all_known, 1, 2)
 		allXs, allYs = [], []

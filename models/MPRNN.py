@@ -46,11 +46,11 @@ class MPRNN(GRNN):
 	def __init__(self,
 		nodes,
 		adj,
-		hidden_size=256, steps=10,
+		hidden_size=256,
 		rnnmdl=RNN_MIN,
 		mpnmdl=MP_THIN,
 		verbose=False):
-		super(MPRNN, self).__init__(len(nodes), hidden_size, steps, rnnmdl)
+		super(MPRNN, self).__init__(len(nodes), hidden_size, rnnmdl)
 
 		self.adj = adj
 		self.nodes = nodes
@@ -78,6 +78,57 @@ class MPRNN(GRNN):
 			print('  * Msgs received: %d' % self.msgcount[ni])
 			print('  * Msgs updated : %d' % self.updcount[ni])
 
+	def eval_hidden(self, ti, nodes, hidden):
+		hevals = []
+		for ni, (node_series, rnn, hdn) in enumerate(zip(nodes, self.rnns, hidden)):
+			value_t = node_series[ti]
+
+			hin = rnn.inp(value_t).unsqueeze(0)
+			hout, hdn = rnn.rnn(hin, hdn)
+			hout = hout.squeeze(0)
+
+			hevals.append(hout)
+			hidden[ni] = hdn # replace previous lstm params
+		return hevals
+
+	def eval_message(self, hevals):
+		msgs = []
+		for ni, (hval, nname) in enumerate(zip(hevals, self.nodes)):
+			# only defined over nodes w/ adj
+			if nname not in self.mpn_ind:
+				msgs.append(None)
+				continue
+
+			mpn = self.mpns[self.mpn_ind[nname]]
+			many = []
+			ninds = [self.nodes.index(neighb) for neighb in self.adj[nname]]
+			assert len(ninds)
+			for neighbor_i in ninds:
+				many.append(mpn.msg(hval, hevals[neighbor_i]))
+			many = torch.stack(many, -1)
+			msg = torch.sum(many, -1)
+			msgs.append(msg)
+
+			self.msgcount[ni] += 1
+		return msgs
+
+	def eval_update(self, hevals, msgs):
+		for ni, (hval, msg, nname) in enumerate(zip(hevals, msgs, self.nodes)):
+			# only defined over nodes w/ adj
+			if msg is None: continue
+			mpn = self.mpns[self.mpn_ind[nname]]
+
+			# replaces hvalues before update
+			hevals[ni] = mpn.upd(hval, msg)
+
+			self.updcount[ni] += 1
+
+	def eval_readout(self, hevals):
+		values_t = []
+		for ni, (hval, rnn) in enumerate(zip(hevals, self.rnns)):
+			values_t.append(rnn.out(hval))
+		return values_t
+
 	def forward(self, series, hidden=None, dump=False):
 		# print(len(series), len(series[0]), series[0][0].size())
 		assert len(self.rnns) == len(series)
@@ -91,55 +142,20 @@ class MPRNN(GRNN):
 		outs_bynode = [list() for _ in series]
 		for ti in range(tsteps):
 
-			# hidden eval for each node
-			hevals = []
-			for ni, (node_inp, rnn, hdn) in enumerate(zip(series, self.rnns, hidden)):
-				node_t = node_inp[ti]
-
-				hin = rnn.inp(node_t).unsqueeze(0)
-				hout, hdn = rnn.rnn(hin, hdn)
-				hout = hout.squeeze(0)
-
-				hevals.append(hout)
-				hidden[ni] = hdn # replace previous lstm params
+			# eval up to latent layer for each node
+			hevals = self.eval_hidden(ti, series, hidden)
 
 			# message passing
-			msgs = []
-			for ni, (hval, nname) in enumerate(zip(hevals, self.nodes)):
-				# only defined over nodes w/ adj
-				if nname not in self.mpn_ind:
-					msgs.append(None)
-					continue
-
-				mpn = self.mpns[self.mpn_ind[nname]]
-				many = []
-				ninds = [self.nodes.index(neighb) for neighb in self.adj[nname]]
-				assert len(ninds)
-				for neighbor_i in ninds:
-					many.append(mpn.msg(hval, hevals[neighbor_i]))
-				many = torch.stack(many, -1)
-				msg = torch.sum(many, -1)
-				msgs.append(msg)
-
-				self.msgcount[ni] += 1
+			msgs = self.eval_message(hevals)
 
 			# updating hidden
-			for ni, (hval, msg, nname) in enumerate(zip(hevals, msgs, self.nodes)):
-				# only defined over nodes w/ adj
-				if msg is None: continue
-				mpn = self.mpns[self.mpn_ind[nname]]
+			self.eval_update(hevals, msgs)
 
-				# replaces hvalues before update
-				hevals[ni] = mpn.upd(hval, msg)
-
-				self.updcount[ni] += 1
 			# read out values from hidden
-			values_t = []
-			for ni, (hval, rnn) in enumerate(zip(hevals, self.rnns)):
-				values_t.append(rnn.out(hval))
+			values_t = self.eval_readout(hevals)
 
-			for nls, value in zip(outs_bynode, values_t):
-				nls.append(value)
+			for node_series, value in zip(outs_bynode, values_t):
+				node_series.append(value)
 
 		# print(len(outs_bynode), len(outs_bynode[0]), outs_bynode[0][0].size())
 		out = list(map(lambda tens: torch.cat(tens, dim=1), outs_bynode))
@@ -155,3 +171,26 @@ class MPRNN(GRNN):
 		opt = optim.SGD(self.parameters(), lr=lr)
 		sch = optim.lr_scheduler.StepLR(opt, step_size=25, gamma=0.5)
 		return criterion, opt, sch
+
+class CMPN(MPRNN):
+	'''
+	Instantiates one RNN per location in input graph.
+	Additionally, instantiates a message passing layer per node.
+
+	MPNs are specified by the given adjacency matrix (list?).
+
+	Value of root is predicted (t) given all known values at (t-h).
+	'''
+
+	def __init__(self,
+		nodes, adj,
+		hidden_size=256,
+		rnnmdl=RNN_MIN, mpnmdl=MP_THIN,
+		verbose=False):
+
+		super(MPRNN, self).__init__(
+			nodes, adj,
+			hidden_size,
+			rnnmdl, mpnmdl,
+			verbose)
+
