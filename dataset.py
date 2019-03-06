@@ -270,7 +270,7 @@ class SpotHistory(data.Dataset):
 			lag=6,
 			res=10,
 			data_path='/home/ubuntu/datasets-aux/mta/parsed',
-			data_post='s',
+			preproc='s',
 			split=0.8,
 			smooth=1.5,
 			norm=10,
@@ -289,7 +289,8 @@ class SpotHistory(data.Dataset):
 		byday = {}
 		byseg = []
 		for segname in segments:
-			smatch = '%s/%s%02d_%s_*.json' % (data_path, data_post, res, segname)
+			smatch = '%s/%s%02d_%s_*.json' % (data_path, preproc, res, segname)
+			# print(smatch)
 			dfiles = sorted(glob(smatch))
 			assert len(dfiles)
 
@@ -367,6 +368,8 @@ class SpotHistory(data.Dataset):
 			for segname, ls in zip(segments, byseg):
 				print('    * [%s]: %d' % (segname, len(ls)))
 			print(' [*] Examples (%s): %d' % (mode, len(self.data)))
+			tsteps = sorted(list(byday.keys()))
+			print(' [*] Time range: %s ~ %s' % (tsteps[0], tsteps[-1]))
 
 			# print(' [*] %s-set size:' % mode, len(self.data))
 			# print(' [*] avg sequence: %.2f' % )

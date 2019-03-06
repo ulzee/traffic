@@ -1,0 +1,157 @@
+
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import numpy as np
+from models.GRNN import *
+
+class MP_THIN(nn.Module):
+	def __init__(self, hsize):
+		super(MP_THIN, self).__init__()
+
+		self.msg_op = nn.Linear(hsize*2, hsize)
+		self.upd_op = nn.Linear(hsize*2, hsize)
+
+	def msg(self, hself, hother):
+		hcat = torch.cat([hself, hother], -1)
+		return self.msg_op(hcat)
+
+	def upd(self, hself, msg):
+		hcat = torch.cat([hself, msg], -1)
+		return self.upd_op(hcat)
+
+class MP_DENSE(MP_THIN):
+	def __init__(self, hsize):
+		super(MP_DENSE, self).__init__(hsize)
+
+		self.msg_op = nn.Sequential(
+			nn.Linear(hsize*2, hsize),
+			nn.ReLU(),
+			nn.Linear(hsize, hsize),
+		)
+		self.upd_op = nn.Sequential(
+			nn.Linear(hsize*2, hsize),
+			nn.ReLU(),
+			nn.Linear(hsize, hsize),
+		)
+
+class MPRNN(GRNN):
+	'''
+	Instantiates one RNN per location in input graph.
+	Additionally, instantiates a message passing layer per node.
+
+	MPNs are specified by the given adjacency matrix (list?).
+	'''
+
+	def __init__(self,
+		nodes,
+		adj,
+		hidden_size=256, steps=10,
+		rnnmdl=RNN_MIN,
+		mpnmdl=MP_THIN,
+		verbose=False):
+		super(MPRNN, self).__init__(len(nodes), hidden_size, steps, rnnmdl)
+
+		self.adj = adj
+		self.nodes = nodes
+
+		mpns = []
+		self.mpn_ind = {}
+		for nname, adjnames in adj.items():
+			if len(adjnames):
+				self.mpn_ind[nname] = len(mpns)
+				mpns.append(mpnmdl(hsize=hidden_size))
+		self.mpns = nn.ModuleList(mpns)
+
+		if verbose:
+			print('MPRNN')
+			print(' [*] Defined over: %d nodes' % len(nodes))
+			print(' [*] Contains    : %d adjs' % len(adj))
+
+	def clear_stats(self):
+		self.msgcount = [0 for _ in self.nodes]
+		self.updcount = [0 for _ in self.nodes]
+
+	def print_stats(self):
+		for ni, nname in enumerate(self.nodes):
+			print('Node:', nname)
+			print('  * Msgs received: %d' % self.msgcount[ni])
+			print('  * Msgs updated : %d' % self.updcount[ni])
+
+	def forward(self, series, hidden=None, dump=False):
+		# print(len(series), len(series[0]), series[0][0].size())
+		assert len(self.rnns) == len(series)
+
+		# lstm params
+		if hidden is None:
+			hidden = [None] * len(series)
+
+		# defined over input timesteps
+		tsteps = len(series[0])
+		outs_bynode = [list() for _ in series]
+		for ti in range(tsteps):
+
+			# hidden eval for each node
+			hevals = []
+			for ni, (node_inp, rnn, hdn) in enumerate(zip(series, self.rnns, hidden)):
+				node_t = node_inp[ti]
+
+				hin = rnn.inp(node_t).unsqueeze(0)
+				hout, hdn = rnn.rnn(hin, hdn)
+				hout = hout.squeeze(0)
+
+				hevals.append(hout)
+				hidden[ni] = hdn # replace previous lstm params
+
+			# message passing
+			msgs = []
+			for ni, (hval, nname) in enumerate(zip(hevals, self.nodes)):
+				# only defined over nodes w/ adj
+				if nname not in self.mpn_ind:
+					msgs.append(None)
+					continue
+
+				mpn = self.mpns[self.mpn_ind[nname]]
+				many = []
+				ninds = [self.nodes.index(neighb) for neighb in self.adj[nname]]
+				assert len(ninds)
+				for neighbor_i in ninds:
+					many.append(mpn.msg(hval, hevals[neighbor_i]))
+				many = torch.stack(many, -1)
+				msg = torch.sum(many, -1)
+				msgs.append(msg)
+
+				self.msgcount[ni] += 1
+
+			# updating hidden
+			for ni, (hval, msg, nname) in enumerate(zip(hevals, msgs, self.nodes)):
+				# only defined over nodes w/ adj
+				if msg is None: continue
+				mpn = self.mpns[self.mpn_ind[nname]]
+
+				# replaces hvalues before update
+				hevals[ni] = mpn.upd(hval, msg)
+
+				self.updcount[ni] += 1
+			# read out values from hidden
+			values_t = []
+			for ni, (hval, rnn) in enumerate(zip(hevals, self.rnns)):
+				values_t.append(rnn.out(hval))
+
+			for nls, value in zip(outs_bynode, values_t):
+				nls.append(value)
+
+		# print(len(outs_bynode), len(outs_bynode[0]), outs_bynode[0][0].size())
+		out = list(map(lambda tens: torch.cat(tens, dim=1), outs_bynode))
+		out = torch.stack(out, dim=-1)
+
+		if dump:
+			return out, hidden
+		else:
+			return out
+
+	def params(self, lr=0.001):
+		criterion = nn.MSELoss().cuda()
+		opt = optim.SGD(self.parameters(), lr=lr)
+		sch = optim.lr_scheduler.StepLR(opt, step_size=25, gamma=0.5)
+		return criterion, opt, sch
