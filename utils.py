@@ -198,37 +198,22 @@ def eval_rnn(viewset, model, fmax=10, test_lag=5, target=0, norm=10, plot=True, 
 	# Xs, Ys = model.format_batch(viewset)
 
 	losses = []
+	plots = []
 	for data in viewset:
 		data = torch.Tensor(data).unsqueeze(0)
 
 		hist = tonpy(data.squeeze(0))
-		if plot: plt.figure(figsize=(14, 5))
-		if plot: plt.plot(hist[:, target] * norm)
+		if plot:
+			plt.figure(figsize=(14, 5))
+			plots.append(plt.plot(hist[:, target] * norm))
+			for ni in range(hist.shape[1]):
+				if ni != target:
+					plt.plot(hist[:, ni] * norm, color='#DDDDDD')
 
-		# chunk = 12
-		# # chunked eval
-		# xoffset = range(chunk, data.size()[1], chunk)
-		# # running eval
-		# y_chunks = []
-		# x_chunks = []
-		# hidden = None
-		# for ti in xoffset:
-		# 	din = data[:, ti-chunk:ti, :model.steps]
-		# 	Xs, _ = model.format_batch(din)
-
-		# 	yhat = model(Xs)
-
-		# 	y_chunks.append(tonpy(yhat[0, :, target]))
-		# 	# y_chunks.append(tonpy(Ys[0, :, target]))
-		# 	x_chunks.append(list(range(ti-chunk + 1, ti)))
-
-		# for xc, yc in zip(x_chunks, y_chunks):
-		# 	if plot: plt.plot(xc, yc, color='C1')
-
-		xoffset = range(data.size()[1])
 		# running eval
 		y_run = []
 		hidden = None
+		xoffset = range(data.size()[1])
 		for ti in xoffset:
 			din = data[:, ti, :model.steps]
 			if xfmt is not None:
@@ -240,31 +225,32 @@ def eval_rnn(viewset, model, fmax=10, test_lag=5, target=0, norm=10, plot=True, 
 
 			y_run.append(tonpy(yhat[:, -1, target]))
 		y_run = np.array(y_run)
-		if plot: plt.plot(range(1, data.size()[1] + 1), y_run * norm, color='red')
+		if plot:
+			plots.append(plt.plot(range(1, data.size()[1] + 1), y_run * norm, color='red'))
 
-		# FIXME: RNN forecast
-		# # running fcast
-		# lamount = test_lag+1
-		# for f0 in range(lamount, data.size()[1], fmax):
-		# 	dwindow = data[:, f0-lamount:f0, :model.stops]
-		# 	y_cast = list(torch.split(dwindow.to(model.device), 1, 1))
-		# 	for fi in range(fmax):
-		# 		din = torch.cat(y_cast[-lamount:], dim=1)
-		# 		Xs, Ys = model.format_batch(din)
-		# 		yhat = model(Xs).unsqueeze(1)
-		# 		y_cast.append(yhat)
-		# 	y_cast = torch.cat(y_cast[lamount:], dim=1)
-		# 	if plot: plt.plot(
-		# 		range(f0, f0+fmax),
-		# 		tonpy(y_cast[:, :, target].squeeze()), color='C2')
+		# Running conditional forecast
+		fcast = []
+		for ti in range(data.size()[1]-1):
+			# batch x time steps x stops
+			dslice = data[:, ti:ti+2, :]
+			if len(fcast):
+				# known value at root is replaced in conditional forecasting
+				dslice[:, :, 0] = fcast[-1]
+			Xs, Ys = model.format_batch(dslice)
 
-		# if plot: plt.legend(['measured', 'running', 'forecast'])
-		if plot: plt.legend(['measured', 'running'])
-
+			yhat = model(Xs)
+			fcast.append(yhat[:, :, target].squeeze().item())
+		if plot:
+			plots.append(plt.plot(
+				range(1, data.size()[1]),
+				np.array(fcast) * norm, color='C2'))
 
 		diff = (hist[:, target][1:] - y_run[:-1, 0]) * norm
 		diff = diff ** 2
 		if plot:
+			plt.legend(
+				[p[0] for p in plots],
+				['measured', 'running', 'conditional'])
 			plt.title('%.4f' % np.mean(diff))
 			plt.show(); plt.close()
 		losses += diff.tolist()
