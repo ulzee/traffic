@@ -72,7 +72,7 @@ def dedupe(segs):
 					covered['%d-%d' % (ti+jj, si+ii)] = True
 	return unique
 
-def evaluate(dset, model, crit, result=False, norm=10):
+def evaluate(dset, model, crit, result=False, norm=10, buff='          '):
 	model.eval()
 	eval_losses = []
 	for bii, batch in enumerate(dset):
@@ -82,7 +82,7 @@ def evaluate(dset, model, crit, result=False, norm=10):
 		loss = crit(outputs, Ys)
 		loss *= norm**2
 		eval_losses.append(loss)
-		sys.stdout.write('eval:%d/%d L%.2f    \r' % (bii+1, len(dset), loss))
+		sys.stdout.write('eval:%d/%d L%.2f %s\r' % (bii+1, len(dset), loss, buff))
 	sys.stdout.flush()
 	print('Eval loss: %.4f' % np.mean(eval_losses))
 	# if result:
@@ -195,7 +195,6 @@ def eval_lin(viewset, model, fmax=10, meval=None, test_lag=5, target=0, norm=10,
 
 def eval_rnn(viewset, model, fmax=10, test_lag=5, target=0, norm=10, plot=True, xfmt=None):
 	import matplotlib.pyplot as plt
-	# Xs, Ys = model.format_batch(viewset)
 
 	losses = []
 	plots = []
@@ -232,20 +231,21 @@ def eval_rnn(viewset, model, fmax=10, test_lag=5, target=0, norm=10, plot=True, 
 		fcast = []
 		for ti in range(data.size()[1]-1):
 			# batch x time steps x stops
-			dslice = data[:, ti:ti+2, :]
+			dslice = data[:, ti:ti+2, :].clone()
 			if len(fcast):
 				# known value at root is replaced in conditional forecasting
+				# FIXME: wrong index?
 				dslice[:, :, 0] = fcast[-1]
 			Xs, Ys = model.format_batch(dslice)
 
 			yhat = model(Xs)
 			fcast.append(yhat[:, :, target].squeeze().item())
-		if plot:
-			plots.append(plt.plot(
-				range(1, data.size()[1]),
-				np.array(fcast) * norm, color='C2'))
+		# if plot:
+		# 	plots.append(plt.plot(
+		# 		range(1, data.size()[1]),
+		# 		np.array(fcast) * norm, color='C2'))
 
-		diff = (hist[:, target][1:] - y_run[:-1, 0]) * norm
+		diff = (hist[1:, target] - y_run[:-1, target]) * norm
 		diff = diff ** 2
 		if plot:
 			plt.legend(
