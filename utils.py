@@ -139,14 +139,16 @@ def eval_lin(viewset, model, fmax=10, meval=None, test_lag=5, target=0, norm=10,
 	for data in viewset:
 		data = torch.Tensor(data).unsqueeze(0)
 
-		hist = tonpy(data.squeeze(0))
+		hist = tonpy(data.squeeze(0)).copy()
 		# print(hist.shape)
-		if plot: plt.figure(figsize=(14, 5))
-		for hi in range(hist.shape[1]):
-			if plot: plt.plot(norm * hist[:, hi], color='#EEEEEE')
-		if plot: plt.plot(norm * hist[:, target], color='C0')
+		if plot:
+			plt.figure(figsize=(14, 5))
+			for hi in range(hist.shape[1]):
+				if hi != target:
+					plt.plot(norm * hist[:, hi], color='#EEEEEE')
+			plt.plot(norm * hist[:, target], color='C0')
 
-		xoffset = range(test_lag+1, data.size()[1])
+		xoffset = range(test_lag+1, data.size()[1]+1)
 		# running eval
 		y_run = []
 		x_pos = []
@@ -161,7 +163,7 @@ def eval_lin(viewset, model, fmax=10, meval=None, test_lag=5, target=0, norm=10,
 			# y_run.append(tonpy(Ys[:, target]))
 			x_pos.append(ti-1)
 		y_run = np.array(y_run)
-		if plot: plt.plot(x_pos, norm * y_run, color='C1')
+		if plot: plt.plot(x_pos, norm * y_run, color='red')
 
 		# running fcast
 		lamount = test_lag+1
@@ -176,14 +178,18 @@ def eval_lin(viewset, model, fmax=10, meval=None, test_lag=5, target=0, norm=10,
 			y_cast = torch.cat(y_cast[lamount:], dim=1)
 			if plot: plt.plot(
 				range(f0, f0+fmax),
-				norm * tonpy(y_cast[:, :, target].squeeze()), color='C2')
+				norm * tonpy(y_cast[:, :, target].squeeze()), color='C1')
 
-		if plot: plt.legend(['measured', 'running', 'forecast'])
+		if plot:
+			plt.legend(['ground truth', 'next pred.', 'forecast'])
 		# if plot: plt.ylim(-3, 35)
 
 
-		ytrue = hist[test_lag+1:, target][1:]
-		yguess = y_run[:-1, 0]
+		ytrue = hist[test_lag:, target]
+		yguess = y_run[:, target]
+		# print(ytrue.shape)
+		# print(yguess.shape)
+		assert len(ytrue) == len(yguess)
 		diff = (ytrue - yguess) * norm
 		diff = diff ** 2
 		mses += diff.tolist()
@@ -193,7 +199,13 @@ def eval_lin(viewset, model, fmax=10, meval=None, test_lag=5, target=0, norm=10,
 			plt.show(); plt.close()
 	return mses
 
-def eval_rnn(viewset, model, fmax=10, test_lag=5, target=0, norm=10, plot=True, xfmt=None):
+def eval_rnn(
+	viewset, model,
+	flag=5, fmax=10,
+	target=0, norm=10,
+	plot=True,
+	xfmt=None):
+
 	import matplotlib.pyplot as plt
 
 	losses = []
@@ -203,11 +215,15 @@ def eval_rnn(viewset, model, fmax=10, test_lag=5, target=0, norm=10, plot=True, 
 
 		hist = tonpy(data.squeeze(0))
 		if plot:
+			others = []
 			plt.figure(figsize=(14, 5))
 			plots.append(plt.plot(hist[:, target] * norm))
 			for ni in range(hist.shape[1]):
 				if ni != target:
-					plt.plot(hist[:, ni] * norm, color='#DDDDDD')
+					others.append(hist[:, ni] * norm)
+					plt.plot(hist[:, ni] * norm, color='#EEEEEE')
+			plt.plot(np.mean(np.array(others), 0), color='#BBBBBB')
+
 
 		# running eval
 		y_run = []
@@ -228,29 +244,63 @@ def eval_rnn(viewset, model, fmax=10, test_lag=5, target=0, norm=10, plot=True, 
 			plots.append(plt.plot(range(1, data.size()[1] + 1), y_run * norm, color='red'))
 
 		# Running conditional forecast
-		fcast = []
-		for ti in range(data.size()[1]-1):
-			# batch x time steps x stops
-			dslice = data[:, ti:ti+2, :].clone()
-			if len(fcast):
-				# known value at root is replaced in conditional forecasting
-				# FIXME: wrong index?
-				dslice[:, :, 0] = fcast[-1]
-			Xs, Ys = model.format_batch(dslice)
+		# only possible with >1 nodes
+		if plot:
+			if data.size()[-1] > 1:
+				print('Conditional Forecast')
+				ccast = []
+				hidden = None
+				local_data = data.clone()
+				for ti in range(data.size()[1]-1):
+					# batch x time steps x stops
+					dslice = local_data[:, ti:ti+2, :]
+					if len(ccast):
+						# last known value is used for target in conditional forecasting
+						dslice[:, 0, 0] = ccast[-1]
+					Xs, Ys = model.format_batch(dslice)
 
-			yhat = model(Xs)
-			fcast.append(yhat[:, :, target].squeeze().item())
-		# if plot:
-		# 	plots.append(plt.plot(
-		# 		range(1, data.size()[1]),
-		# 		np.array(fcast) * norm, color='C2'))
+					yhat, hidden = model(Xs, hidden=hidden, dump=True)
+					ccast.append(yhat[:, :, target].squeeze().item())
+					# ccast.append(Ys[:, :, target].squeeze().item())
+			if plot:
+				plots.append(plt.plot(
+					range(1, data.size()[1]),
+					np.array(ccast) * norm, color='C2'))
+
+			# Self-predictions (forecast) fmax-ahead given flag
+			fcast = []
+			fcast_t = []
+			hidden = None
+			for ti in range(flag, data.size()[1]-fmax, flag):
+				# batch x time steps x stops
+				dslice = data[:, ti-flag:ti+fmax, :].clone()
+
+				# first observe the lag
+				lagX, _ = model.format_batch(dslice[:, :flag+1])
+				yhat, hidden = model(lagX, hidden=hidden, dump=True)
+				dslice[:, flag] = yhat[:, -1, target]
+
+				# now running forecast (fmax-ahead)
+				for fi in range(fmax-1):
+					tind = flag+fi
+					x_t, _ = model.format_batch(dslice[:, tind:tind+2])
+					yhat, hidden = model(x_t, hidden=hidden, dump=True)
+					dslice[:, tind+1] = yhat
+
+				fcast.append(tonpy(dslice)[0, flag:, target])
+				fcast_t.append(range(ti, ti+fmax))
+			if plot:
+				for erange, entry in zip(fcast_t, fcast):
+					plots.append(plt.plot(
+						erange,
+						np.array(entry) * norm, color='C1'))
 
 		diff = (hist[1:, target] - y_run[:-1, target]) * norm
 		diff = diff ** 2
 		if plot:
 			plt.legend(
 				[p[0] for p in plots],
-				['measured', 'running', 'conditional'])
+				['ground truth', 'next pred.', 'cond. fcast', 'forecast'])
 			plt.title('%.4f' % np.mean(diff))
 			plt.show(); plt.close()
 		losses += diff.tolist()
@@ -664,3 +714,28 @@ def tfill(tvlist, res):
 	assert tsteps == len(vs)
 
 	return vs
+
+def show_graph(vs, es):
+	from graphviz import Digraph
+	dot = Digraph(comment='The Round Table')
+	for vi, vert in enumerate(vs):
+		shape='box' if vi == 0 else None
+		dot.node(vert, vert, shape=shape)
+	for vi, (vert, alist) in enumerate(es.items()):
+		for vto in alist:
+			dot.edge(vert, vto)
+	return dot
+
+def read_graph(fname):
+	import json
+	with open(fname) as fl:
+		SROUTE, adjspec = json.load(fl)
+
+	ADJ = {}
+	for ind, ls in adjspec:
+		ADJ[SROUTE[ind]] = [SROUTE[ii] for ii in ls]
+
+	print(SROUTE)
+	print(ADJ)
+
+	return SROUTE, ADJ

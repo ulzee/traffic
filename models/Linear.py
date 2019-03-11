@@ -36,6 +36,7 @@ class Linear(nn.Module):
 
 		Xs = Xs.view(-1, known_t * self.stops).to(self.device).float()
 
+
 		return Xs, Ys
 
 class Dense(Linear):

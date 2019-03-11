@@ -327,6 +327,7 @@ class SpotHistory(data.Dataset):
 					t0 = s2d(segvs[0]['time'])
 				if s2d(segvs[-1]['time']) < tf:
 					tf = s2d(segvs[-1]['time'])
+			# print(t0, tf)
 
 			dt = tf - t0
 			tsteps = dt.seconds // (60 * res) + 1
