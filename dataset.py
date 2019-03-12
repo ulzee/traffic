@@ -269,7 +269,7 @@ class SpotHistory(data.Dataset):
 			mode, bsize,
 			lag=6,
 			res=10,
-			data_path='/home/ubuntu/datasets-aux/mta/parsed',
+			data_path=PARSED_PATH,
 			preproc='s',
 			split=0.8,
 			smooth=1.5,
