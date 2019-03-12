@@ -351,9 +351,10 @@ class SpotHistory(data.Dataset):
 		self.data = self.data[:tsplit] if mode == 'train' else self.data[tsplit:]
 
 		if lag is not None:
+			ldata = self.data
 			stride = 1
 			self.data = []
-			for series in self.rawdata:
+			for series in ldata:
 				for ti in range(lag, len(series), stride):
 					seg = series[ti-lag:ti]
 					self.data.append(seg)

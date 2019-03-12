@@ -19,15 +19,14 @@ np.random.seed(0)
 
 # graph file
 SROUTE, ADJ = read_graph(sys.argv[1], verbose=False, named_adj=True)
-graph = show_graph(SROUTE, ADJ)
-render_graph(fileName(sys.argv[1]), SROUTE, ADJ)
+# graph = show_graph(SROUTE, ADJ)
+# render_graph(fileName(sys.argv[1]), SROUTE, ADJ)
 
-TAG = 'mprnn'
+TAG = 'rnn'
 save_path = '%s/%s/%s.pth' % (CKPT_STORAGE, TAG, fileName(sys.argv[1]))
 print('Saving to:')
 print(save_path)
 
-DENSE = False
 EPS = 20
 LAG = 24 + 1
 HSIZE = 128
@@ -38,19 +37,10 @@ dset = SpotHistory(SROUTE, 'train', 32, lag=LAG, res=10).generator()
 evalset = SpotHistory(SROUTE, 'test', 32, lag=LAG, res=10).generator()
 
 from models.temporal.RNN import *
-from models.MPRNN import *
 
-model = MPRNN(
-	nodes=SROUTE, adj=ADJ,
-	hidden_size=HSIZE,
-
-	rnnmdl=RNN,
-	mpnmdl=MP_DENSE,
-
-	verbose=True).to(device)
+model = RNN(hidden_size=HSIZE, steps=STOPS).to(device)
 model.device = device
-model.clear_stats()
-criterion, opt, sch = model.params(lr=0.001)
+criterion, opt, sch = model.params(lr=0.01)
 evf = lambda: evaluate(
 	evalset, model,
 	crit=lambda _y, y: criterion(_y[:, :, 0], y[:, :, 0]).item())
@@ -95,11 +85,9 @@ for eii  in range(EPS):
 	sch.step()
 
 viewset = SpotHistory(SROUTE, 'test', 18, lag=None, res=10, shuffle=False, verbose=False)
-def xfmt(datain):
-    bynode = torch.split(datain.to(device).float().unsqueeze(1), 1, 2)
-    return bynode
-model.steps = len(SROUTE)
-sqerr = eval_rnn(viewset, model, plot=False, xfmt=xfmt)
+
+sqerr = eval_rnn(viewset, model, plot=False)
+print('Eval segments:', len(viewset))
 print('Eval MSE: %.4f' % np.mean(sqerr))
 
 torch.save(model, save_path)

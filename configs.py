@@ -5,6 +5,8 @@ DPATH = '/home/ubuntu/traffic/data'
 ROUTES = 'stopcodes_sequence'
 SPEEDS = 'avgspeeds-full-ts-xclude'
 
+LOG_PATH = 'jobs/outputs'
+CKPT_STORAGE = '/home/ubuntu/datasets-aux/checkpoints'
 SAMPLE_ROUTES = [
 	'M102_0',
 	'Bx15_0',
