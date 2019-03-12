@@ -715,27 +715,75 @@ def tfill(tvlist, res):
 
 	return vs
 
-def show_graph(vs, es):
+def show_graph(vs, es, vdesc=lambda ent: ent):
 	from graphviz import Digraph
-	dot = Digraph(comment='The Round Table')
+	dot = Digraph(comment=vs[0], format='jpg')
 	for vi, vert in enumerate(vs):
 		shape='box' if vi == 0 else None
-		dot.node(vert, vert, shape=shape)
+		dot.node(vert, vdesc(vert), shape=shape)
+		# dot.node(vert, vert, shape=shape)
 	for vi, (vert, alist) in enumerate(es.items()):
 		for vto in alist:
 			dot.edge(vert, vto)
 	return dot
 
-def read_graph(fname):
+def read_graph(fname, verbose=True, named_adj=False):
 	import json
 	with open(fname) as fl:
 		SROUTE, adjspec = json.load(fl)
 
-	ADJ = {}
-	for ind, ls in adjspec:
-		ADJ[SROUTE[ind]] = [SROUTE[ii] for ii in ls]
+	if named_adj:
+		ADJ = adjspec
+	else:
+		ADJ = {}
+		for ind, ls in adjspec:
+			ADJ[SROUTE[ind]] = [SROUTE[ii] for ii in ls]
 
-	print(SROUTE)
-	print(ADJ)
+	if verbose:
+		print(SROUTE)
+		print(ADJ)
 
 	return SROUTE, ADJ
+
+def prune_graph(vs, adj, validf, minv=0.5):
+    pvs = []
+    padj = {}
+
+    queue = [vs[0]]
+    while len(queue):
+        vert = queue[0]
+        queue = queue[1:]
+
+        pvs.append(vert)
+        padj[vert] = []
+        for child in adj[vert]:
+            if validf(child) >= minv:
+                if child not in padj[vert]: padj[vert].append(child)
+                if child not in queue:
+                    queue.append(child)
+
+    return pvs, padj
+
+def rev_graph(vs, adj):
+	rvs = vs
+	radj = {}
+
+	for vert in vs:
+		if vert not in radj: radj[vert] = []
+		for child in adj[vert]:
+			if child not in radj: radj[child] = []
+			if vert not in radj[child]:
+				radj[child].append(vert)
+
+	return rvs, radj
+
+def render_graph(name, vs, adj):
+	with open('data/valid_counts.txt') as fl:
+		lines = fl.read().split('\n')[1:-1]
+	valids = {}
+	for ln in lines:
+		stop, count = ln.split(',')
+		valids[stop] = int(count)
+
+	gobj = show_graph(vs, adj, vdesc=lambda vert: ('%.2f' % (valids[vert]/13248)))
+	gobj.render('jobs/outputs/%s' % name)

@@ -9,6 +9,7 @@ spark
 metadata
 scripts
 old
+jobs/outputs
 # C extensions
 *.so
 

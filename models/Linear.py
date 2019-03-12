@@ -24,7 +24,7 @@ class Linear(nn.Module):
 
 	def params(self, lr=0.001):
 		criterion = nn.MSELoss().cuda()
-		opt = optim.SGD(self.parameters(), lr=lr)
+		opt = optim.Adam(self.parameters(), lr=lr)
 		sch = optim.lr_scheduler.StepLR(opt, step_size=30, gamma=0.5)
 		return criterion, opt, sch
 

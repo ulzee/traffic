@@ -168,20 +168,11 @@ class MPRNN(GRNN):
 
 	def params(self, lr=0.001):
 		criterion = nn.MSELoss().cuda()
-		opt = optim.SGD(self.parameters(), lr=lr)
-		sch = optim.lr_scheduler.StepLR(opt, step_size=25, gamma=0.5)
+		opt = optim.Adam(self.parameters(), lr=lr)
+		sch = optim.lr_scheduler.StepLR(opt, step_size=15, gamma=0.5)
 		return criterion, opt, sch
 
-class CMPN(MPRNN):
-	'''
-	Instantiates one RNN per location in input graph.
-	Additionally, instantiates a message passing layer per node.
-
-	MPNs are specified by the given adjacency matrix (list?).
-
-	Value of root is predicted (t) given all known values at (t-h).
-	(conditional predictions)
-	'''
+class MPRNN_OPT(MPRNN):
 
 	def __init__(self,
 		nodes,
@@ -191,85 +182,5 @@ class CMPN(MPRNN):
 		mpnmdl=MP_THIN,
 		verbose=False):
 
-		super(CMPN, self).__init__(nodes, adj, hidden_size, rnnmdl, mpnmdl, verbose)
-
-		hsize = hidden_size
-		self.ro_agg = nn.Sequential(
-			nn.Linear(hsize, hsize),
-			nn.ReLU(),
-			nn.Linear(hsize, hsize),
-		)
-
-		self.readout = nn.Sequential(
-			nn.Linear(hsize, 1)
-		)
-
-	def eval_readout(self, hevals):
-		values_t = []
-		for ni, (hval, rnn) in enumerate(zip(hevals, self.rnns)):
-			values_t.append(self.ro_agg(hval))
-		values_t = torch.stack(values_t, dim=-1)
-		agg = torch.sum(values_t, dim=-1)
-
-		root_t = self.readout(agg)
-		return root_t
-
-	def forward(self, series, hidden=None, dump=False):
-		# print(len(series), len(series[0]), series[0][0].size())
-		assert len(self.rnns) == len(series)
-
-		# lstm params
-		if hidden is None:
-			hidden = [None] * len(series)
-
-		# defined over input timesteps
-		tsteps = len(series[0])
-		# outs_bynode = [list() for _ in series]
-		root_outs = []
-		for ti in range(tsteps):
-
-			# eval up to latent layer for each node
-			hevals = self.eval_hidden(ti, series, hidden)
-
-			# message passing
-			msgs = self.eval_message(hevals)
-
-			# updating hidden
-			self.eval_update(hevals, msgs)
-
-			# deduce value of root from graph-wide readout
-			root_t = self.eval_readout(hevals)
-			root_outs.append(root_t)
-
-		out = torch.stack(root_outs, dim=1)
-
-		if dump:
-			return out, hidden
-		else:
-			return out
-
-	def format_batch(self, data, withold=None):
-		all_known = data[:, :, :]
-
-		bystop = torch.split(all_known, 1, 2)
-		allXs, allYs = [], []
-		for known in bystop:
-			# raw   : batch x timelen x seqlen
-			data = torch.transpose(known, 1, 0)
-			# fmt   : timelen x batch x seqlen
-
-			bytime = list(torch.split(data, 1, dim=0))
-			seq = list(map(lambda tens: tens.to(self.device).float().squeeze(0), bytime))
-
-			Xs = seq[:-1]
-			Ys = seq[1:] # predict immediately following values
-
-			Ys = torch.stack(Ys, dim=1) # restack Ys by temporal
-			allXs.append(Xs)
-			allYs.append(Ys)
-
-		rootY = allYs[0]
-		# allYs = torch.cat(allYs, dim=2)
-
-		return allXs, rootY
-
+		super(MPRNN_OPT, self).__init__(
+			nodes, adj, hidden_size, rnnmdl, mpnmdl, verbose)
