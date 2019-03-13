@@ -778,7 +778,7 @@ def rev_graph(vs, adj):
 	return rvs, radj
 
 def render_graph(name, vs, adj):
-	with open('data/valid_counts.txt') as fl:
+	with open('../shiva-traffic/Valid-Counts.txt') as fl:
 		lines = fl.read().split('\n')[1:-1]
 	valids = {}
 	for ln in lines:
