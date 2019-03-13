@@ -291,9 +291,10 @@ def eval_rnn(
 				fcast_t.append(range(ti, ti+fmax))
 			if plot:
 				for erange, entry in zip(fcast_t, fcast):
-					plots.append(plt.plot(
-						erange,
-						np.array(entry) * norm, color='C1'))
+					pass
+					# plots.append(plt.plot(
+					# 	erange,
+					# 	np.array(entry) * norm, color='C1'))
 
 		diff = (hist[1:, target] - y_run[:-1, target]) * norm
 		diff = diff ** 2
@@ -777,7 +778,23 @@ def rev_graph(vs, adj):
 
 	return rvs, radj
 
-def render_graph(name, vs, adj):
+def complete_graph(vs, adj):
+	rvs = vs
+	radj = {}
+
+	for vert in vs:
+		if vert not in radj: radj[vert] = []
+		for child in adj[vert]:
+			if child not in radj: radj[child] = []
+
+			if vert not in radj[child]:
+				radj[child].append(vert)
+			if child not in radj[vert]:
+				radj[vert].append(child)
+
+	return rvs, radj
+
+def render_graph(name, vs, adj, save=True):
 	with open('../shiva-traffic/Valid-Counts.txt') as fl:
 		lines = fl.read().split('\n')[1:-1]
 	valids = {}
@@ -786,4 +803,7 @@ def render_graph(name, vs, adj):
 		valids[stop] = int(count)
 
 	gobj = show_graph(vs, adj, vdesc=lambda vert: ('%.2f' % (valids[vert]/13248)))
-	gobj.render('jobs/outputs/%s' % name)
+	if save:
+		gobj.render('jobs/outputs/%s' % name)
+	else:
+		return gobj
