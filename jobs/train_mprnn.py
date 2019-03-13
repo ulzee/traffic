@@ -51,7 +51,7 @@ model = MPRNN(
 	verbose=True).to(device)
 model.device = device
 model.clear_stats()
-criterion, opt, sch = model.params(lr=0.005)
+criterion, opt, sch = model.params(lr=0.001)
 evf = lambda: evaluate(
 	evalset, model,
 	crit=lambda _y, y: criterion(_y[:, :, 0], y[:, :, 0]).item())
@@ -93,7 +93,7 @@ for eii  in range(EPS):
 
 	eval_mse.append(evf())
 	sys.stdout.flush()
-	sch.step()
+	# sch.step()
 
 viewset = SpotHistory(SROUTE, 'test', 18, lag=None, res=10, shuffle=False, verbose=False)
 def xfmt(datain):
