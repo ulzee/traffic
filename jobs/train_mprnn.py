@@ -29,7 +29,7 @@ print('Saving to:')
 print(save_path)
 
 DENSE = False
-EPS = 20
+EPS = 40
 LAG = 24 + 1
 HSIZE = 128
 STOPS = len(SROUTE)
@@ -51,7 +51,7 @@ model = MPRNN(
 	verbose=True).to(device)
 model.device = device
 model.clear_stats()
-criterion, opt, sch = model.params(lr=0.001)
+criterion, opt, sch = model.params(lr=0.005)
 evf = lambda: evaluate(
 	evalset, model,
 	crit=lambda _y, y: criterion(_y[:, :, 0], y[:, :, 0]).item())
