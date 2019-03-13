@@ -19,6 +19,7 @@ np.random.seed(0)
 
 # graph file
 SROUTE, ADJ = read_graph(sys.argv[1], verbose=False, named_adj=True)
+SROUTE, ADJ = complete_graph(SROUTE, ADJ)
 graph = show_graph(SROUTE, ADJ)
 render_graph(fileName(sys.argv[1]), SROUTE, ADJ)
 
