@@ -323,12 +323,14 @@ def fmt(raw):
 		stop=parts[-1],
 	)
 
-def group(ls, field, show=False):
+def group(ls, field, show=False, kf=None):
 	buses = {}
 	for obj in ls:
-		if obj[field] not in buses:
-			buses[obj[field]] = []
-		buses[obj[field]].append(obj)
+		key = obj[field]
+		if kf is not None: key = kf(key)
+		if key not in buses:
+			buses[key] = []
+		buses[key].append(obj)
 	if show:
 		for k, v in buses.items():
 			print(k, len(v))
@@ -807,3 +809,36 @@ def render_graph(name, vs, adj, save=True):
 		gobj.render('jobs/outputs/%s' % name)
 	else:
 		return gobj
+
+def find_fringes(vs, adj):
+	is_pointed = {}
+	for _, ls in adj.items():
+		for other in ls:
+			is_pointed[other] = True
+	fringes = []
+	for vert in vs:
+		if vert not in is_pointed:
+			fringes.append(vs.index(vert))
+	assert len(fringes) <= len(vs)
+	return fringes
+
+def collect(byf, fname, verbose=True):
+    res = []
+    li = 0
+    added = 0
+    with open(fname) as fl:
+        _ = fl.readline()
+        line = fl.readline()
+        while line:
+            if 'NULL' not in line and 'IN_PROGRESS' in line:
+                obj = byf(line)
+                if obj is not None:
+                    res.append(obj)
+                    added += 1
+            line = fl.readline()
+            li += 1
+            if li % 10000 == 0 and verbose:
+                sys.stdout.write('%d       \r' % li)
+        if verbose: sys.stdout.flush()
+    if verbose: print('Collected %d/%d' % (added, li))
+    return res

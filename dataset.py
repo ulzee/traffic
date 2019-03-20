@@ -292,7 +292,10 @@ class SpotHistory(data.Dataset):
 			smatch = '%s/%s%02d_%s_*.json' % (data_path, preproc, res, segname)
 			# print(smatch)
 			dfiles = sorted(glob(smatch))
-			assert len(dfiles)
+			try:
+				assert len(dfiles)
+			except:
+				raise Exception('Missing: %s' % smatch)
 
 			for dname in dfiles:
 				day = dname.split('_')[-1].replace('.json', '')
