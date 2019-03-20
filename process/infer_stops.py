@@ -23,8 +23,9 @@ def by(line):
 		if 'X' not in bus_id:
 			return fobj
 	except:
-		print(line)
-		assert False
+		print('WARN: Skipping line with missing columns...')
+		print('>', line)
+		# assert False
 	return None
 
 def next_stops(travel, adj={}):
@@ -35,13 +36,19 @@ def next_stops(travel, adj={}):
 				# sensor reset? or loop-around... either way unreliable
 				# should be okay to ignore when inferring stops from lots of data
 				pass
-			elif stop['time'] - prev['time'] > 60 * 60:
+			elif mktime(stop['time']) - mktime(prev['time']) > 45 * 60:
 				# skip if >1hr difference
 				pass
 			else:
+				if prev['stop'] == 'MTA_903147' and stop['stop'] == 'MTA_404008':
+					print('>')
+					print(stop)
+					print('=')
+					print(prev)
+
 				if prev['stop'] not in adj: adj[prev['stop']] = {}
-				if stop['stop'] not in adj[prev['stop']]: adj[prev['stop']][stop['stop']] = []
-				adj[prev['stop']][stop['stop']].append((prev, stop))
+				if stop['stop'] not in adj[prev['stop']]: adj[prev['stop']][stop['stop']] = 0
+				adj[prev['stop']][stop['stop']] += 1
 			prev = stop
 
 mtafiles = sorted(glob('/home/ubuntu/datasets-aux/mta/*.txt'))
