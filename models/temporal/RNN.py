@@ -56,7 +56,7 @@ class RNN_MIN(nn.Module):
 	def params(self, lr=0.001):
 		criterion = nn.MSELoss().cuda()
 		opt = optim.Adam(self.parameters(), lr=lr)
-		sch = optim.lr_scheduler.StepLR(opt, step_size=25, gamma=0.5)
+		sch = optim.lr_scheduler.StepLR(opt, step_size=30, gamma=0.5)
 		return criterion, opt, sch
 
 	def format_batch(self, data, withold=None):
@@ -99,18 +99,20 @@ class RNN(RNN_MIN):
 
 		self.rnn = nn.LSTM(hidden_size, hidden_size, 1)
 
-class RNN_OPT(RNN):
-	def __init__(self, hidden_size=256, steps=10):
-		super(RNN_OPT, self).__init__(hidden_size, steps)
+class RNN_SNG(RNN_MIN):
+	def __init__(self, hidden_size=128, steps=1):
+		super(RNN_SNG, self).__init__(hidden_size, steps)
 
 		hsize = hidden_size
 		self.inp = nn.Sequential(
-			nn.Linear(self.insize, hsize),
-			nn.ReLU(),
+			nn.Linear(self.insize, self.insize)
+		)
+		self.out = nn.Sequential(
 			nn.Linear(hsize, hsize),
+			# nn.ReLU(),
+			# nn.Linear(hsize, hsize),
 			nn.ReLU(),
-			nn.Dropout(0.5),
-			nn.Linear(hsize, hsize),
+			nn.Linear(hsize, self.outsize),
 		)
 
-		self.rnn = nn.LSTM(hidden_size, hidden_size, 2)
+		self.rnn = nn.LSTM(1, hidden_size, 1)

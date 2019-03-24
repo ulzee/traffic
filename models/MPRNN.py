@@ -55,13 +55,14 @@ class MPRNN(GRNN):
 		self.adj = adj
 		self.nodes = nodes
 
-		mpns = []
+		mpns_list = []
 		self.mpn_ind = {}
 		for nname, adjnames in adj.items():
 			if len(adjnames):
-				self.mpn_ind[nname] = len(mpns)
-				mpns.append(mpnmdl(hsize=hidden_size))
-		self.mpns = nn.ModuleList(mpns)
+				self.mpn_ind[nname] = len(mpns_list)
+				mpns_list.append(mpnmdl(hsize=hidden_size))
+		self.mpns = nn.ModuleList(mpns_list)
+		self.mpns_list = mpns_list
 
 		if verbose:
 			print('MPRNN')
@@ -69,14 +70,16 @@ class MPRNN(GRNN):
 			print(' [*] Contains    : %d adjs' % len(adj))
 
 	def clear_stats(self):
-		self.msgcount = [0 for _ in self.nodes]
-		self.updcount = [0 for _ in self.nodes]
+		pass
+		# self.msgcount = [0 for _ in self.nodes]
+		# self.updcount = [0 for _ in self.nodes]
 
 	def print_stats(self):
-		for ni, nname in enumerate(self.nodes):
-			print('Node:', nname)
-			print('  * Msgs received: %d' % self.msgcount[ni])
-			print('  * Msgs updated : %d' % self.updcount[ni])
+		pass
+		# for ni, nname in enumerate(self.nodes):
+		# 	print('Node:', nname)
+		# 	print('  * Msgs received: %d' % self.msgcount[ni])
+		# 	print('  * Msgs updated : %d' % self.updcount[ni])
 
 	def eval_hidden(self, ti, nodes, hidden):
 		hevals = []
@@ -109,7 +112,7 @@ class MPRNN(GRNN):
 			msg = torch.sum(many, -1)
 			msgs.append(msg)
 
-			self.msgcount[ni] += 1
+			# self.msgcount[ni] += 1
 		return msgs
 
 	def eval_update(self, hevals, msgs):
@@ -121,7 +124,7 @@ class MPRNN(GRNN):
 			# replaces hvalues before update
 			hevals[ni] = mpn.upd(hval, msg)
 
-			self.updcount[ni] += 1
+			# self.updcount[ni] += 1
 
 	def eval_readout(self, hevals):
 		values_t = []
@@ -171,16 +174,3 @@ class MPRNN(GRNN):
 		opt = optim.Adam(self.parameters(), lr=lr)
 		sch = optim.lr_scheduler.StepLR(opt, step_size=15, gamma=0.5)
 		return criterion, opt, sch
-
-class MPRNN_OPT(MPRNN):
-
-	def __init__(self,
-		nodes,
-		adj,
-		hidden_size=256,
-		rnnmdl=RNN_MIN,
-		mpnmdl=MP_THIN,
-		verbose=False):
-
-		super(MPRNN_OPT, self).__init__(
-			nodes, adj, hidden_size, rnnmdl, mpnmdl, verbose)

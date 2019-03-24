@@ -796,7 +796,7 @@ def complete_graph(vs, adj):
 
 	return rvs, radj
 
-def render_graph(name, vs, adj, save=True):
+def render_graph(name, vs, adj, save=True, path='jobs/outputs'):
 	with open('../shiva-traffic/Valid-Counts.txt') as fl:
 		lines = fl.read().split('\n')[1:-1]
 	valids = {}
@@ -806,19 +806,29 @@ def render_graph(name, vs, adj, save=True):
 
 	gobj = show_graph(vs, adj, vdesc=lambda vert: ('%.2f' % (valids[vert]/13248)))
 	if save:
-		gobj.render('jobs/outputs/%s' % name)
+		gobj.render('%s/%s' % (path, name))
 	else:
 		return gobj
 
-def find_fringes(vs, adj):
+def find_fringes(vs, adj, twoway=False):
+	# default only returns downstream fringes
+
 	is_pointed = {}
-	for _, ls in adj.items():
+	no_children = {}
+	for vert, ls in adj.items():
 		for other in ls:
 			is_pointed[other] = True
+		if len(ls) == 0:
+			no_children[vert] = True
 	fringes = []
-	for vert in vs:
-		if vert not in is_pointed:
-			fringes.append(vs.index(vert))
+	if twoway:
+		for vert in vs:
+			if vert not in is_pointed:
+				fringes.append(vs.index(vert))
+	for vert in no_children.keys():
+		ind = vs.index(vert)
+		if ind not in fringes:
+			fringes.append(ind)
 	assert len(fringes) <= len(vs)
 	return fringes
 
