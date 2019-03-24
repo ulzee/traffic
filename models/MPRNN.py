@@ -27,10 +27,32 @@ class MP_DENSE(MP_THIN):
 		self.msg_op = nn.Sequential(
 			nn.Linear(hsize*2, hsize),
 			nn.ReLU(),
+			# nn.Linear(hsize, hsize),
+			# nn.ReLU(),
 			nn.Linear(hsize, hsize),
 		)
 		self.upd_op = nn.Sequential(
 			nn.Linear(hsize*2, hsize),
+			nn.ReLU(),
+			nn.Linear(hsize, hsize),
+		)
+
+
+class MP_DEEP(MP_THIN):
+	def __init__(self, hsize):
+		super(MP_DEEP, self).__init__(hsize)
+
+		self.msg_op = nn.Sequential(
+			nn.Linear(hsize*2, hsize),
+			nn.ReLU(),
+			nn.Linear(hsize, hsize),
+			nn.ReLU(),
+			nn.Linear(hsize, hsize),
+		)
+		self.upd_op = nn.Sequential(
+			nn.Linear(hsize*2, hsize),
+			nn.ReLU(),
+			nn.Linear(hsize, hsize),
 			nn.ReLU(),
 			nn.Linear(hsize, hsize),
 		)
@@ -64,6 +86,9 @@ class MPRNN(GRNN):
 		self.mpns = nn.ModuleList(mpns_list)
 		self.mpns_list = mpns_list
 
+		self.stats=dict(
+			noadj={},
+		)
 		if verbose:
 			print('MPRNN')
 			print(' [*] Defined over: %d nodes' % len(nodes))
@@ -98,7 +123,8 @@ class MPRNN(GRNN):
 		msgs = []
 		for ni, (hval, nname) in enumerate(zip(hevals, self.nodes)):
 			# only defined over nodes w/ adj
-			if nname not in self.mpn_ind:
+			if not len(self.adj[nname]):
+				self.stats['noadj'][nname] = True
 				msgs.append(None)
 				continue
 
@@ -126,7 +152,7 @@ class MPRNN(GRNN):
 
 			# self.updcount[ni] += 1
 
-	def eval_readout(self, hevals):
+	def eval_readout(self, hevals, hidden):
 		values_t = []
 		for ni, (hval, rnn) in enumerate(zip(hevals, self.rnns)):
 			values_t.append(rnn.out(hval))
@@ -138,7 +164,12 @@ class MPRNN(GRNN):
 
 		# lstm params
 		if hidden is None:
-			hidden = [None] * len(series)
+			bsize = series[0][0].size()[0]
+			hshape = (1, bsize, self.hidden_size)
+			hidden = [(
+					torch.rand(*hshape).to(self.device),
+					torch.rand(*hshape).to(self.device)
+				) for _ in range(len(series))]
 
 		# defined over input timesteps
 		tsteps = len(series[0])
@@ -155,7 +186,7 @@ class MPRNN(GRNN):
 			self.eval_update(hevals, msgs)
 
 			# read out values from hidden
-			values_t = self.eval_readout(hevals)
+			values_t = self.eval_readout(hevals, hidden)
 
 			for node_series, value in zip(outs_bynode, values_t):
 				node_series.append(value)

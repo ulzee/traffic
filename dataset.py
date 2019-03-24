@@ -273,6 +273,7 @@ class SpotHistory(data.Dataset):
 			preproc='s',
 			split=0.8,
 			smooth=1.5,
+			clip_hours=5,
 			norm=10,
 			shuffle=True,
 			verbose=True,
@@ -285,6 +286,7 @@ class SpotHistory(data.Dataset):
 		self.lag = lag
 		self.norm = norm
 		self.res = res
+		self.clip_hours = clip_hours
 
 		byday = {}
 		byseg = []
@@ -321,6 +323,7 @@ class SpotHistory(data.Dataset):
 
 		# align the speeds
 		self.rawdata = []
+		self.trange = []
 		for ii, (day, gathered, vlists) in enumerate(all_avail):
 			t0 = s2d(vlists[0][0]['time'])
 			tf = s2d(vlists[0][-1]['time'])
@@ -347,6 +350,10 @@ class SpotHistory(data.Dataset):
 					vs = blur1d(vs, sigma=smooth)
 				vs /= norm
 				vmat[:, si] = vs[ind:ind+tsteps]
+			self.trange.append((t0, tf))
+
+			if self.clip_hours is not None:
+				vmat = vmat[self.clip_hours*6:]
 			self.rawdata.append(vmat)
 		self.data = self.rawdata
 

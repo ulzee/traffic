@@ -4,6 +4,8 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 from models.MPRNN import *
+from time import time
+from utils import *
 
 class MPRNN_ITER(MPRNN):
 	'''
@@ -44,15 +46,22 @@ class MPRNN_ITER(MPRNN):
 			self.mpns = nn.ModuleList(self.mpns_list)
 			self.mpn_ind = newmap
 
+		if verbose:
+			print('MPRNN_ITER')
+			print('iters:', iters)
+			print('indep:', iter_indep)
+
 	def eval_message(self, it, hevals):
 		msgs = []
 		for ni, (hval, nname) in enumerate(zip(hevals, self.nodes)):
 			# only defined over nodes w/ adj
-			if nname not in self.mpn_ind:
+			if not len(self.adj[nname]):
+				self.stats['noadj'][nname] = True
 				msgs.append(None)
 				continue
 
 			if self.iter_indep:
+				# NOTE: indexed by iteration
 				mpn = self.mpns[self.mpn_ind[it][nname]]
 			else:
 				mpn = self.mpns[self.mpn_ind[nname]]
@@ -68,13 +77,30 @@ class MPRNN_ITER(MPRNN):
 			# self.msgcount[ni] += 1
 		return msgs
 
+	def eval_update(self, it, hevals, msgs):
+		for ni, (hval, msg, nname) in enumerate(zip(hevals, msgs, self.nodes)):
+			# only defined over nodes w/ adj
+			if msg is None: continue
+
+			# NOTE: indexed by iteration
+			mpn = self.mpns[self.mpn_ind[it][nname]]
+
+			# replaces hvalues before update
+			hevals[ni] = mpn.upd(hval, msg)
+
 	def forward(self, series, hidden=None, dump=False):
 		# print(len(series), len(series[0]), series[0][0].size())
 		assert len(self.rnns) == len(series)
 
 		# lstm params
 		if hidden is None:
-			hidden = [None] * len(series)
+			# hidden = [None] * len(series)
+			bsize = series[0][0].size()[0]
+			hshape = (1, bsize, self.hidden_size)
+			hidden = [(
+					torch.rand(*hshape).to(self.device),
+					torch.rand(*hshape).to(self.device)
+				) for _ in range(len(series))]
 
 		# defined over input timesteps
 		tsteps = len(series[0])
@@ -89,10 +115,10 @@ class MPRNN_ITER(MPRNN):
 				msgs = self.eval_message(it, hevals)
 
 				# updating hidden
-				self.eval_update(hevals, msgs)
+				self.eval_update(it, hevals, msgs)
 
 			# read out values from hidden
-			values_t = self.eval_readout(hevals)
+			values_t = self.eval_readout(hevals, hidden)
 
 			for node_series, value in zip(outs_bynode, values_t):
 				node_series.append(value)
@@ -112,19 +138,66 @@ class MPRNN_ITER(MPRNN):
 		sch = optim.lr_scheduler.StepLR(opt, step_size=15, gamma=0.5)
 		return criterion, opt, sch
 
-# class MPRNN_SNG(MPRNN):
-# 	'''
-# 	Defines a single LSTM update which is aware of the hidden state at all observed stops
-# 	(instead of individual updates)
-# 	'''
 
-# 	def __init__(self,
-# 		nodes,
-# 		adj,
-# 		hidden_size=256,
-# 		rnnmdl=RNN_MIN,
-# 		mpnmdl=MP_THIN,
-# 		verbose=False):
 
-# 		super(MPRNN_SNG, self).__init__(
-# 			nodes, adj, hidden_size, rnnmdl, mpnmdl, verbose)
+class MPRNN_FCAST(MPRNN_ITER):
+	'''
+	Only observes selected nodes and propagates information to the rest
+	'''
+
+	def __init__(self,
+		nodes, adj,
+
+		iters=1,
+		iter_indep=True, # defines an independent operator corresp. to iteration level
+
+		hidden_size=256,
+		rnnmdl=RNN,
+		mpnmdl=MP_DEEP,
+		verbose=False):
+
+		fringes = find_fringes(nodes, adj, twoway=True)
+		nodes, adj = complete_graph(nodes, adj)
+		if verbose:
+			print('FCAST')
+			print('Fringes:', fringes)
+		super(MPRNN_FCAST, self).__init__(
+			nodes, adj,
+			iters,
+			iter_indep,
+			hidden_size,
+			rnnmdl, mpnmdl, verbose)
+
+		self.fringes = fringes
+
+	def eval_hidden(self, ti, nodes, hidden):
+		hevals = []
+		for ni, (node_series, rnn, hdn) in enumerate(zip(nodes, self.rnns, hidden)):
+			if ni not in self.fringes:
+				# For others, the hidden layer persists
+				hevals.append(hdn[0].squeeze(0))
+				continue
+
+			# True obs. at fringes are read through a FC layer
+			value_t = node_series[ti]
+			hout = rnn.inp(value_t)
+			hevals.append(hout)
+
+		assert len(hevals) == len(nodes)
+		return hevals
+
+	def eval_readout(self, hevals, hidden):
+		values_t = []
+		for ni, (hval, rnn, hdn) in enumerate(zip(hevals, self.rnns, hidden)):
+
+			hin = hval.unsqueeze(0)
+			hout, hdn = rnn.rnn(hin, hdn)
+			hout = hout.squeeze(0)
+
+			hidden[ni] = hdn
+
+			vout = rnn.out(hval)
+			values_t.append(vout)
+
+		assert len(hevals) == len(values_t)
+		return values_t

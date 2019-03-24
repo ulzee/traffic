@@ -108,10 +108,10 @@ class RNN_SNG(RNN_MIN):
 			nn.Linear(self.insize, self.insize)
 		)
 		self.out = nn.Sequential(
-			nn.Linear(hsize, hsize),
+			# nn.Linear(hsize, hsize),
 			# nn.ReLU(),
 			# nn.Linear(hsize, hsize),
-			nn.ReLU(),
+			# nn.ReLU(),
 			nn.Linear(hsize, self.outsize),
 		)
 

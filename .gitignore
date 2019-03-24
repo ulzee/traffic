@@ -1,4 +1,7 @@
 # Byte-compiled / optimized / DLL files
+temp*
+Valid-Counts-Sorted.txt
+process/images
 eval
 __pycache__/
 *.py[cod]
