@@ -34,7 +34,7 @@ print('Saving to:')
 print(save_path)
 
 dset = SpotHistory(SROUTE, 'train', 32, lag=LAG, res=10).generator()
-evalset = SpotHistory(SROUTE, 'test', 32, lag=LAG, res=10, shuffle=False).generator()
+valset = SpotHistory(SROUTE, 'test', 32, lag=LAG, res=10, shuffle=False).generator()
 
 from models.temporal.RNN import *
 from models.MPRNN import *
@@ -42,10 +42,11 @@ from models.Variants import *
 
 HSIZE = 128
 
+ITERS = int(fileName(graph_file)[:-5]split('_n')[1])
 model = MPRNN_FCAST(
     nodes=SROUTE, adj=ADJ,
 
-    iters=2,
+    iters=ITERS,
 
     hidden_size=HSIZE,
     verbose=True).to(device)
