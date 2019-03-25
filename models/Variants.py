@@ -7,7 +7,7 @@ from models.MPRNN import *
 from time import time
 from utils import *
 
-class MPRNN_ITER(MPRNN):
+class MPRNN_ITER(MPRNN, nn.Module):
 	'''
 	Iteratively applies I-iterations of message passing and updating before inferring values.
 
@@ -138,9 +138,68 @@ class MPRNN_ITER(MPRNN):
 		sch = optim.lr_scheduler.StepLR(opt, step_size=15, gamma=0.5)
 		return criterion, opt, sch
 
+class MP_ENC(MP_THIN):
+	def __init__(self, hsize):
+		super(MP_ENC, self).__init__(hsize)
+
+		isize = hsize//2
+		self.msg_op = nn.Sequential(
+			nn.Linear(hsize*2, isize),
+			# nn.ReLU(),
+			# nn.Linear(isize, isize),
+			# nn.ReLU(),
+			# nn.Linear(isize, isize),
+		)
+		self.upd_op = nn.Sequential(
+			nn.Linear(hsize + isize, isize),
+			nn.ReLU(),
+			# nn.Dropout(0.2),
+			# nn.Linear(isize, isize),
+			# nn.ReLU(),
+			nn.Linear(isize, hsize),
+		)
 
 
-class MPRNN_FCAST(MPRNN_ITER):
+class MP_DEEP(MP_THIN):
+	def __init__(self, hsize):
+		super(MP_DEEP, self).__init__(hsize)
+
+		self.msg_op = nn.Sequential(
+			nn.Linear(hsize*2, hsize),
+			nn.ReLU(),
+			nn.Linear(hsize, hsize),
+			nn.ReLU(),
+			nn.Linear(hsize, hsize),
+		)
+		self.upd_op = nn.Sequential(
+			nn.Linear(hsize*2, hsize),
+			nn.ReLU(),
+			nn.Linear(hsize, hsize),
+			nn.ReLU(),
+			nn.Linear(hsize, hsize),
+		)
+
+class RNN_HDN(RNN_MIN):
+	def __init__(self, hidden_size=256, steps=10):
+		super(RNN_HDN, self).__init__(hidden_size, steps)
+
+		hsize = hidden_size
+		self.inp = nn.Sequential(
+			nn.Linear(self.insize + hsize, hsize),
+			nn.ReLU(),
+			# nn.Linear(hsize, hsize),
+			# nn.ReLU(),
+			nn.Linear(hsize, hsize),
+		)
+		self.out = nn.Sequential(
+			nn.Linear(hsize, hsize),
+			# nn.ReLU(),
+			# nn.Linear(hsize, hsize),
+			nn.ReLU(),
+			nn.Linear(hsize, self.outsize),
+		)
+
+class MPRNN_FCAST(MPRNN_ITER, nn.Module):
 	'''
 	Only observes selected nodes and propagates information to the rest
 	'''
@@ -152,15 +211,12 @@ class MPRNN_FCAST(MPRNN_ITER):
 		iter_indep=True, # defines an independent operator corresp. to iteration level
 
 		hidden_size=256,
-		rnnmdl=RNN,
-		mpnmdl=MP_DEEP,
+		rnnmdl=RNN_HDN,
+		mpnmdl=MP_DENSE,
 		verbose=False):
 
 		fringes = find_fringes(nodes, adj, twoway=True)
 		nodes, adj = complete_graph(nodes, adj)
-		if verbose:
-			print('FCAST')
-			print('Fringes:', fringes)
 		super(MPRNN_FCAST, self).__init__(
 			nodes, adj,
 			iters,
@@ -169,6 +225,12 @@ class MPRNN_FCAST(MPRNN_ITER):
 			rnnmdl, mpnmdl, verbose)
 
 		self.fringes = fringes
+
+		if verbose:
+			print('FCAST')
+			print(' [*] Fringes:', fringes)
+			print(' [*] RNN:', rnnmdl)
+			print(' [*] MPN:', mpnmdl)
 
 	def eval_hidden(self, ti, nodes, hidden):
 		hevals = []
@@ -180,7 +242,8 @@ class MPRNN_FCAST(MPRNN_ITER):
 
 			# True obs. at fringes are read through a FC layer
 			value_t = node_series[ti]
-			hout = rnn.inp(value_t)
+			hin = torch.cat([hdn[0].squeeze(0), value_t], dim=-1)
+			hout = rnn.inp(hin)
 			hevals.append(hout)
 
 		assert len(hevals) == len(nodes)

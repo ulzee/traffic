@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
+from utils import *
 
 class RNN_MIN(nn.Module):
 	name = 'rnn'
@@ -85,14 +86,10 @@ class RNN(RNN_MIN):
 		self.inp = nn.Sequential(
 			nn.Linear(self.insize, hsize),
 			nn.ReLU(),
-			# nn.Linear(hsize, hsize),
-			# nn.ReLU(),
 			nn.Linear(hsize, hsize),
 		)
 		self.out = nn.Sequential(
 			nn.Linear(hsize, hsize),
-			# nn.ReLU(),
-			# nn.Linear(hsize, hsize),
 			nn.ReLU(),
 			nn.Linear(hsize, self.outsize),
 		)
@@ -116,3 +113,13 @@ class RNN_SNG(RNN_MIN):
 		)
 
 		self.rnn = nn.LSTM(1, hidden_size, 1)
+
+
+class RNN_FCAST(RNN):
+
+	def __init__(self, nodes, adj, hidden_size=256, steps=10):
+		super(RNN_FCAST, self).__init__(hidden_size, steps)
+
+		fringes = find_fringes(nodes, adj, twoway=True)
+		# nodes, adj = complete_graph(nodes, adj)
+		self.fringes = fringes

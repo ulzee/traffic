@@ -37,27 +37,7 @@ class MP_DENSE(MP_THIN):
 			nn.Linear(hsize, hsize),
 		)
 
-
-class MP_DEEP(MP_THIN):
-	def __init__(self, hsize):
-		super(MP_DEEP, self).__init__(hsize)
-
-		self.msg_op = nn.Sequential(
-			nn.Linear(hsize*2, hsize),
-			nn.ReLU(),
-			nn.Linear(hsize, hsize),
-			nn.ReLU(),
-			nn.Linear(hsize, hsize),
-		)
-		self.upd_op = nn.Sequential(
-			nn.Linear(hsize*2, hsize),
-			nn.ReLU(),
-			nn.Linear(hsize, hsize),
-			nn.ReLU(),
-			nn.Linear(hsize, hsize),
-		)
-
-class MPRNN(GRNN):
+class MPRNN(GRNN, nn.Module):
 	'''
 	Instantiates one RNN per location in input graph.
 	Additionally, instantiates a message passing layer per node.
@@ -85,6 +65,7 @@ class MPRNN(GRNN):
 				mpns_list.append(mpnmdl(hsize=hidden_size))
 		self.mpns = nn.ModuleList(mpns_list)
 		self.mpns_list = mpns_list
+
 
 		self.stats=dict(
 			noadj={},

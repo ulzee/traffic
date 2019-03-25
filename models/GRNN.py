@@ -20,7 +20,9 @@ class GRNN(nn.Module):
 		self.hidden_size = hidden_size
 
 		many_rnns = [rnnmdl(hidden_size, 1) for _ in range(nodes)]
-		self.rnns = nn.ModuleList(many_rnns)
+		self._rnns = many_rnns
+		self.rnns = nn.ModuleList(self._rnns)
+		# self.inner_rnns = nn.ModuleList(many_rnns)
 
 	def forward(self, nodes, hidden=None, dump=False):
 		assert len(self.rnns) == len(nodes)
@@ -65,4 +67,5 @@ class GRNN(nn.Module):
 
 		allYs = torch.cat(allYs, dim=2)
 		# print(len(allXs), allYs.size())
+		# assert False
 		return allXs, allYs
