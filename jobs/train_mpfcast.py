@@ -26,7 +26,7 @@ SROUTE, ADJ = read_graph(graph_file,
 
 EPS = 60
 LAG = 24 + 1
-device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 TAG = 'mpfcast'
 save_path = '%s/%s/%s.pth' % (CKPT_STORAGE, TAG, fileName(sys.argv[1]))
