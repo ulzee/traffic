@@ -42,7 +42,7 @@ from models.Variants import *
 
 HSIZE = 128
 
-ITERS = int(fileName(graph_file)[:-5].split('_n')[1])
+ITERS = int(graph_file[:-5].split('_n')[1])
 model = MPRNN_FCAST(
     nodes=SROUTE, adj=ADJ,
 
