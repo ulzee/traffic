@@ -57,7 +57,7 @@ model.to(device)
 model.device = device
 model.hops = hops
 
-criterion, opt, sch = model.params(lr=0.001)
+criterion, opt, sch = model.params(lr=0.0005)
 evf = lambda: evaluate(
     valset, model,
     crit=lambda _y, y: criterion(_y[:, :, 0], y[:, :, 0]).item())
@@ -111,6 +111,7 @@ for eii  in range(EPS):
     eval_mse.append(last_eval)
 
     sys.stdout.flush()
+    sch.step()
 
 with open('%s/%s/%s_log.json' % (LOG_PATH, TAG, fileName(sys.argv[1])), 'w') as fl:
 	json.dump([

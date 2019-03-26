@@ -863,3 +863,68 @@ def collect(byf, fname, verbose=True):
         if verbose: sys.stdout.flush()
     if verbose: print('Collected %d/%d' % (added, li))
     return res
+
+def subgraph(selected, vs, adj):
+	subadj = {}
+	for vert in selected:
+		subadj[vert] = [v for v in adj[vert] if v in selected]
+
+	return selected, subadj
+
+def find_hops_2way(hops, vs, adj):
+	graphs = []
+	cvs, cadj = complete_graph(vs, adj)
+
+	for ri, root in enumerate(cvs):
+		# search h-hops forward and backward for each root
+		visited = {}
+		frontier = dict(before=[root], after=[root])
+		depth = {root:0}
+		exceeded = False
+
+		maxd = dict(before=0, after=0)
+		while len(frontier['before']) and len(frontier['after']):
+		# while len(frontier['after']):
+
+			# original sucessors (in direction od directed graph)
+			for vert in frontier['after']:
+				visited[vert] = True
+			head = {}
+			for vert in frontier['after']:
+				if depth[vert] < hops:
+					for child in adj[vert]:
+						if child in visited: continue
+						depth[child] = depth[vert] + 1
+						if maxd['after'] < depth[child]:
+							maxd['after'] = depth[child]
+						head[child] = True
+			head = list(head.keys())
+			frontier['after'] = head
+
+			# predecessors (rev. direction of og graph)
+			for vert in frontier['before']:
+				visited[vert] = True
+			head = {}
+			for vert in frontier['before']:
+				if depth[vert] < hops:
+					for arb_child in cadj[vert]:
+						if vert in adj[arb_child]:
+							# check that predecessor points to current
+							child = arb_child
+							if child in visited: continue
+							depth[child] = depth[vert] + 1
+							if maxd['before'] < depth[child]:
+								maxd['before'] = depth[child]
+							head[child] = True
+			head = list(head.keys())
+			frontier['before'] = head
+
+		if maxd['after'] == hops and maxd['before'] == hops:
+			verts = [root]
+			for vert in visited.keys():
+				if vert not in verts: verts.append(vert)
+			graphs.append((
+				subgraph(verts, vs, adj),
+				depth
+			))
+	return graphs

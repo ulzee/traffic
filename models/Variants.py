@@ -140,7 +140,7 @@ class MPRNN_ITER(MPRNN, nn.Module):
 	def params(self, lr=0.001):
 		criterion = nn.MSELoss().cuda()
 		opt = optim.Adam(self.parameters(), lr=lr)
-		sch = optim.lr_scheduler.StepLR(opt, step_size=15, gamma=0.5)
+		sch = optim.lr_scheduler.StepLR(opt, step_size=4, gamma=0.5)
 		return criterion, opt, sch
 
 class MP_ENC(MP_THIN):
@@ -204,7 +204,7 @@ class RNN_HDN(RNN_MIN):
 			nn.Linear(hsize, self.outsize),
 		)
 
-class MPRNN_FCAST(MPRNN_ITER, nn.Module):
+class MPRNN_FCAST(MPRNN_ITER):
 	'''
 	Only observes selected nodes and propagates information to the rest
 	'''
@@ -270,3 +270,26 @@ class MPRNN_FCAST(MPRNN_ITER, nn.Module):
 
 		assert len(hevals) == len(values_t)
 		return values_t
+
+class MPRNN_COMPL(MPRNN_FCAST):
+	'''
+	Observes all nodes during training
+	'''
+
+	name = 'mpcompl'
+	def eval_hidden(self, ti, nodes, hidden):
+		hevals = []
+		for ni, (node_series, rnn, hdn) in enumerate(zip(nodes, self.rnns, hidden)):
+			# if ni not in self.fringes:
+			# 	# For others, the hidden layer persists
+			# 	hevals.append(hdn[0].squeeze(0))
+			# 	continue
+
+			# True obs. at fringes are read through a FC layer
+			value_t = node_series[ti]
+			hin = torch.cat([hdn[0].squeeze(0), value_t], dim=-1)
+			hout = rnn.inp(hin)
+			hevals.append(hout)
+
+		assert len(hevals) == len(nodes)
+		return hevals
