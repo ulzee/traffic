@@ -97,6 +97,10 @@ class MPRNN(GRNN):
 		return sfile
 
 	def load_prior(self):
+		if self.hops == 1:
+			print('WARN: No hops lower than 1')
+			return
+
 		wpath = self.ckpt_path(hops=self.hops-1)
 
 		print('Transfer:', wpath)
