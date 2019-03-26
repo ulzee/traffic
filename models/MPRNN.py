@@ -37,7 +37,7 @@ class MP_DENSE(MP_THIN):
 			nn.Linear(hsize, hsize),
 		)
 
-class MPRNN(GRNN, nn.Module):
+class MPRNN(GRNN):
 	'''
 	Instantiates one RNN per location in input graph.
 	Additionally, instantiates a message passing layer per node.
@@ -46,9 +46,10 @@ class MPRNN(GRNN, nn.Module):
 	'''
 
 	def __init__(self,
-		nodes,
-		adj,
+		nodes, adj,
+
 		hidden_size=256,
+
 		rnnmdl=RNN_MIN,
 		mpnmdl=MP_THIN,
 		verbose=False):
@@ -57,9 +58,11 @@ class MPRNN(GRNN, nn.Module):
 		self.adj = adj
 		self.nodes = nodes
 
+		# follows a canonical order as defined by input order of nodes
 		mpns_list = []
 		self.mpn_ind = {}
-		for nname, adjnames in adj.items():
+		for nname in nodes:
+			adjnames = adj[nname]
 			if len(adjnames):
 				self.mpn_ind[nname] = len(mpns_list)
 				mpns_list.append(mpnmdl(hsize=hidden_size))
@@ -74,6 +77,46 @@ class MPRNN(GRNN, nn.Module):
 			print('MPRNN')
 			print(' [*] Defined over: %d nodes' % len(nodes))
 			print(' [*] Contains    : %d adjs' % len(adj))
+
+	def ckpt_path(self, hops=None):
+		if hops is None:
+			hops = self.hops
+
+		sfile = '%s/mprnn/%s_n%d.pth' % (
+			CKPT_STORAGE,
+			self.nodes[0],
+			hops,
+		)
+		return sfile
+
+	def load_prior(self):
+		wpath = self.ckpt_path(hops=self.hops-1)
+
+		print('Transfer:', wpath)
+
+		pdict = torch.load(wpath)
+
+		self_dict = self.state_dict()
+		match = 0
+		for k, v in self_dict.items():
+			if k in pdict:
+				match += 1
+				self_dict[k] = pdict[k]
+		self.load_state_dict(self_dict)
+
+		print('Matched: %d params' % match)
+
+	def load(self, wpath=None):
+		if wpath is None:
+			wpath = self.ckpt_path()
+
+		print('Loading:', wpath)
+		self.load_state_dict(torch.load(wpath))
+
+	def save(self):
+		sfile = self.ckpt_path()
+		print('Saving to:', sfile)
+		torch.save(self.state_dict(), sfile)
 
 	def clear_stats(self):
 		pass

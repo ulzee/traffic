@@ -14,14 +14,13 @@ class GRNN(nn.Module):
 		nodes=1,
 		hidden_size=256,
 		rnnmdl=RNN_MIN):
-		super(GRNN, self).__init__()
+		super().__init__()
 
 		self.lag = 5 # min needed for inference
 		self.hidden_size = hidden_size
 
 		many_rnns = [rnnmdl(hidden_size, 1) for _ in range(nodes)]
-		self._rnns = many_rnns
-		self.rnns = nn.ModuleList(self._rnns)
+		self.rnns = nn.ModuleList(many_rnns)
 		# self.inner_rnns = nn.ModuleList(many_rnns)
 
 	def forward(self, nodes, hidden=None, dump=False):

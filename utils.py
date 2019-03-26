@@ -83,13 +83,14 @@ def evaluate(dset, model, crit, result=False, norm=10, buff='          '):
 		Xs, Ys = model.format_batch(batch)
 
 		t0 = time()
-		outputs = model(Xs)
-		# print('\nExec: %.2fs' % (time() - t0))
+		with torch.no_grad():
+			outputs = model(Xs)
+			# print('\nExec: %.2fs' % (time() - t0))
 
-		t0 = time()
-		loss = crit(outputs, Ys)
-		# print('\nCrit: %.2fs' % (time() - t0))
-		loss *= norm**2
+			t0 = time()
+			loss = crit(outputs, Ys)
+			# print('\nCrit: %.2fs' % (time() - t0))
+			loss *= norm**2
 		eval_losses.append(loss)
 		sys.stdout.write('eval:%d/%d L%.2f %s\r' % (bii+1, len(dset), loss, buff))
 		t0 = time()
