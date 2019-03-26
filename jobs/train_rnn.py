@@ -47,7 +47,7 @@ evf = lambda: evaluate(
 
 
 print('Pre-evaluate:')
-_ = evf()
+best_eval = evf()
 
 print('Train:')
 train_mse = []
@@ -80,7 +80,12 @@ for eii  in range(EPS):
 		))
 	sys.stdout.write('\n')
 
-	eval_mse.append(evf())
+	last_eval = evf()
+	if last_eval < best_eval:
+		torch.save(model.state_dict(), save_path)
+		best_eval = last_eval
+	eval_mse.append(last_eval)
+
 	sys.stdout.flush()
 	sch.step()
 
@@ -90,7 +95,6 @@ sqerr = eval_rnn(viewset, model, plot=False)
 print('Eval segments:', len(viewset))
 print('Eval MSE: %.4f' % np.mean(sqerr))
 
-torch.save(model.state_dict(), save_path)
 with open('%s/%s/%s_log.json' % (LOG_PATH, TAG, fileName(sys.argv[1])), 'w') as fl:
 	json.dump([
 		eval_mse,
