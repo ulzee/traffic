@@ -36,6 +36,11 @@ class MP_DENSE(MP_THIN):
 			nn.ReLU(),
 			nn.Linear(hsize, hsize),
 		)
+		self.lossy = nn.Sequential(
+			nn.ReLU(),
+			nn.Dropout(0.5),
+			# nn.Linear(hsize, hsize),
+		)
 
 class MPRNN(GRNN):
 	'''
@@ -45,6 +50,7 @@ class MPRNN(GRNN):
 	MPNs are specified by the given adjacency matrix (list?).
 	'''
 
+	name = 'mprnn'
 	def __init__(self,
 		nodes, adj,
 
@@ -82,8 +88,9 @@ class MPRNN(GRNN):
 		if hops is None:
 			hops = self.hops
 
-		sfile = '%s/mprnn/%s_n%d.pth' % (
+		sfile = '%s/%s/%s_n%d.pth' % (
 			CKPT_STORAGE,
+			self.name,
 			self.nodes[0],
 			hops,
 		)

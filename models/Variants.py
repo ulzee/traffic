@@ -18,6 +18,7 @@ class MPRNN_ITER(MPRNN, nn.Module):
 	* Reduce MPN dense layer size
 	'''
 
+	name = 'mpiter'
 	def __init__(self,
 		nodes, adj,
 
@@ -85,8 +86,12 @@ class MPRNN_ITER(MPRNN, nn.Module):
 			# NOTE: indexed by iteration
 			mpn = self.mpns[self.mpn_ind[it][nname]]
 
+			uval = mpn.upd(hval, msg)
+			if it == self.iters-1:
+				uval = mpn.lossy(uval)
+
 			# replaces hvalues before update
-			hevals[ni] = mpn.upd(hval, msg)
+			hevals[ni] = uval
 
 	def forward(self, series, hidden=None, dump=False):
 		# print(len(series), len(series[0]), series[0][0].size())
@@ -204,6 +209,7 @@ class MPRNN_FCAST(MPRNN_ITER, nn.Module):
 	Only observes selected nodes and propagates information to the rest
 	'''
 
+	name = 'mpfcast'
 	def __init__(self,
 		nodes, adj,
 

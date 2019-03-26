@@ -274,7 +274,7 @@ class SpotHistory(data.Dataset):
 			split=0.8,
 			smooth=1.5,
 			clip_hours=5,
-			norm=10,
+			norm=(12, 10), # raw mean, scale
 			shuffle=True,
 			verbose=True,
 		):
@@ -348,7 +348,9 @@ class SpotHistory(data.Dataset):
 				vs = np.array(tfill(segvs, res))
 				if smooth is not None:
 					vs = blur1d(vs, sigma=smooth)
-				vs /= norm
+				# vs /= norm
+				nmean, nscale = norm
+				vs = (vs - nmean) / nscale
 				vmat[:, si] = vs[ind:ind+tsteps]
 			self.trange.append((t0, tf))
 
