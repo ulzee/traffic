@@ -43,6 +43,14 @@ class RNN_MIN(nn.Module):
 	def forward(self, inputs, hidden=None, dump=False, wrap=True):
 		temporal = len(inputs)
 
+		if hidden is None:
+			bsize = inputs[0].size()[0]
+			hshape = (1, bsize, self.hidden_size)
+			hidden = (
+				torch.rand(*hshape).to(self.device),
+				torch.rand(*hshape).to(self.device)
+			)
+
 		outputs = []
 		for ii in range(temporal):
 			output, hidden = self.step(inputs[ii], hidden)
