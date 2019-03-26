@@ -27,9 +27,9 @@ save_path = '%s/%s/%s.pth' % (CKPT_STORAGE, TAG, fileName(sys.argv[1]))
 print('Saving to:')
 print(save_path)
 
-EPS = 20
+EPS = 40
 LAG = 24 + 1
-HSIZE = 128
+HSIZE = 256
 STOPS = len(SROUTE)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -40,7 +40,7 @@ from models.temporal.RNN import *
 
 model = RNN(hidden_size=HSIZE, steps=STOPS).to(device)
 model.device = device
-criterion, opt, sch = model.params(lr=0.01)
+criterion, opt, sch = model.params(lr=0.001)
 evf = lambda: evaluate(
 	evalset, model,
 	crit=lambda _y, y: criterion(_y[:, :, 0], y[:, :, 0]).item())
@@ -90,7 +90,7 @@ sqerr = eval_rnn(viewset, model, plot=False)
 print('Eval segments:', len(viewset))
 print('Eval MSE: %.4f' % np.mean(sqerr))
 
-torch.save(model, save_path)
+torch.save(model.state_dict(), save_path)
 with open('%s/%s/%s_log.json' % (LOG_PATH, TAG, fileName(sys.argv[1])), 'w') as fl:
 	json.dump([
 		eval_mse,
