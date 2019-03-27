@@ -24,7 +24,7 @@ SROUTE, ADJ = read_graph(graph_file,
 # SROUTE, ADJ = complete_graph(SROUTE, ADJ)
 # graph = show_graph(SROUTE, ADJ)
 
-EPS = 8
+EPS = 12
 LAG = 24 + 1
 hops = int(graph_file[:-5].split('_n')[1])
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -57,7 +57,7 @@ model.to(device)
 model.device = device
 model.hops = hops
 
-criterion, opt, sch = model.params(lr=0.0005)
+criterion, opt, sch = model.params(lr=0.001)
 evf = lambda: evaluate(
     valset, model,
     crit=lambda _y, y: criterion(_y[:, :, 0], y[:, :, 0]).item())
@@ -111,7 +111,7 @@ for eii  in range(EPS):
     eval_mse.append(last_eval)
 
     sys.stdout.flush()
-    sch.step()
+    if eii == 0: sch.step()
 
 with open('%s/%s/%s_log.json' % (LOG_PATH, TAG, fileName(sys.argv[1])), 'w') as fl:
 	json.dump([

@@ -7,7 +7,7 @@ from models.MPRNN import *
 from time import time
 from utils import *
 
-class MPRNN_ITER(MPRNN, nn.Module):
+class MPRNN_ITER(MPRNN):
 	'''
 	Iteratively applies I-iterations of message passing and updating before inferring values.
 
@@ -29,7 +29,7 @@ class MPRNN_ITER(MPRNN, nn.Module):
 		rnnmdl=RNN_MIN,
 		mpnmdl=MP_THIN,
 		verbose=False):
-		super(MPRNN_ITER, self).__init__(nodes, adj, hidden_size, rnnmdl, mpnmdl, verbose)
+		super().__init__(nodes, adj, hidden_size, rnnmdl, mpnmdl, verbose)
 
 		self.iters = iters
 		self.iter_indep = iter_indep
@@ -39,7 +39,8 @@ class MPRNN_ITER(MPRNN, nn.Module):
 			for it in range(iters):
 				newmap[it] = {}
 
-			for nname, ind in self.mpn_ind.items():
+			for nname in nodes:
+				ind = self.mpn_ind[nname]
 				newmap[0][nname] = ind
 				for it in range(1, iters):
 					newmap[it][nname] = len(self.mpns_list)
@@ -140,7 +141,7 @@ class MPRNN_ITER(MPRNN, nn.Module):
 	def params(self, lr=0.001):
 		criterion = nn.MSELoss().cuda()
 		opt = optim.Adam(self.parameters(), lr=lr)
-		sch = optim.lr_scheduler.StepLR(opt, step_size=4, gamma=0.5)
+		sch = optim.lr_scheduler.StepLR(opt, step_size=1, gamma=0.1)
 		return criterion, opt, sch
 
 class MP_ENC(MP_THIN):
@@ -223,7 +224,7 @@ class MPRNN_FCAST(MPRNN_ITER):
 
 		fringes = find_fringes(nodes, adj, twoway=True)
 		nodes, adj = complete_graph(nodes, adj)
-		super(MPRNN_FCAST, self).__init__(
+		super().__init__(
 			nodes, adj,
 			iters,
 			iter_indep,
