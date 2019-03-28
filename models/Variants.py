@@ -218,13 +218,13 @@ class RNN_HDN(RNN_MIN):
 		hsize = hidden_size
 		self.inp = nn.Sequential(
 			nn.Linear(self.insize + hsize, hsize),
-			# nn.ReLU(),
+			nn.ReLU(),
 			# nn.Linear(hsize, hsize),
 			# nn.ReLU(), # relu input to LSTM
 		)
 		self.out = nn.Sequential(
 			# nn.Linear(hsize, hsize),
-			# nn.ReLU(),
+			nn.ReLU(),
 			nn.Linear(hsize, self.outsize),
 		)
 
