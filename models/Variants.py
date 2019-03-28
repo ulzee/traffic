@@ -28,8 +28,9 @@ class MPRNN_ITER(MPRNN):
 		hidden_size=256,
 		rnnmdl=RNN_MIN,
 		mpnmdl=MP_THIN,
+		single_mpn=False,
 		verbose=False):
-		super().__init__(nodes, adj, hidden_size, rnnmdl, mpnmdl, verbose)
+		super().__init__(nodes, adj, hidden_size, rnnmdl, mpnmdl, single_mpn, verbose)
 
 		self.iters = iters
 		self.iter_indep = iter_indep
@@ -39,13 +40,24 @@ class MPRNN_ITER(MPRNN):
 			for it in range(iters):
 				newmap[it] = {}
 
-			for nname in nodes:
-				ind = self.mpn_ind[nname]
-				newmap[0][nname] = ind
+			if single_mpn:
+				for nname in nodes:
+					ind = self.mpn_ind[nname]
+					newmap[0][nname] = ind
+					for it in range(1, iters):
+						# each iteration level shares one global messenger
+						newmap[it][nname] = it
 				for it in range(1, iters):
-					newmap[it][nname] = len(self.mpns_list)
 					self.mpns_list.append(mpnmdl(hsize=hidden_size))
-			self.mpns = nn.ModuleList(self.mpns_list)
+				self.mpns = nn.ModuleList(self.mpns_list)
+			else:
+				for nname in nodes:
+					ind = self.mpn_ind[nname]
+					newmap[0][nname] = ind
+					for it in range(1, iters):
+						newmap[it][nname] = len(self.mpns_list)
+						self.mpns_list.append(mpnmdl(hsize=hidden_size))
+				self.mpns = nn.ModuleList(self.mpns_list)
 			self.mpn_ind = newmap
 
 		if verbose:
@@ -141,7 +153,7 @@ class MPRNN_ITER(MPRNN):
 	def params(self, lr=0.001):
 		criterion = nn.MSELoss().cuda()
 		opt = optim.Adam(self.parameters(), lr=lr)
-		sch = optim.lr_scheduler.StepLR(opt, step_size=1, gamma=0.1)
+		sch = optim.lr_scheduler.StepLR(opt, step_size=2, gamma=0.1)
 		return criterion, opt, sch
 
 class MP_ENC(MP_THIN):
@@ -187,7 +199,7 @@ class MP_DEEP(MP_THIN):
 
 class RNN_HDN(RNN_MIN):
 	def __init__(self, hidden_size=256, steps=10):
-		super(RNN_HDN, self).__init__(hidden_size, steps)
+		super().__init__(hidden_size, steps)
 
 		hsize = hidden_size
 		self.inp = nn.Sequential(
@@ -220,6 +232,7 @@ class MPRNN_FCAST(MPRNN_ITER):
 		hidden_size=256,
 		rnnmdl=RNN_HDN,
 		mpnmdl=MP_DENSE,
+		single_mpn=False,
 		verbose=False):
 
 		fringes = find_fringes(nodes, adj, twoway=True)
@@ -229,7 +242,8 @@ class MPRNN_FCAST(MPRNN_ITER):
 			iters,
 			iter_indep,
 			hidden_size,
-			rnnmdl, mpnmdl, verbose)
+			rnnmdl, mpnmdl,
+			single_mpn, verbose)
 
 		self.fringes = fringes
 

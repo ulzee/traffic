@@ -22,13 +22,14 @@ class MP_THIN(nn.Module):
 
 class MP_DENSE(MP_THIN):
 	def __init__(self, hsize):
-		super(MP_DENSE, self).__init__(hsize)
+		super().__init__(hsize)
 
 		self.msg_op = nn.Sequential(
 			nn.Linear(hsize*2, hsize),
 			nn.ReLU(),
-			# nn.Linear(hsize, hsize),
-			# nn.ReLU(),
+			nn.Linear(hsize, hsize),
+			nn.ReLU(),
+			# nn.Dropout(0.5),
 			nn.Linear(hsize, hsize),
 		)
 		self.upd_op = nn.Sequential(
@@ -39,7 +40,13 @@ class MP_DENSE(MP_THIN):
 		self.lossy = nn.Sequential(
 			nn.ReLU(),
 			nn.Dropout(0.5),
+			# nn.ReLU(),
 			# nn.Linear(hsize, hsize),
+			# nn.ReLU(),
+			# nn.Dropout(0.5),
+			# nn.Linear(hsize, hsize),
+			# nn.ReLU(),
+			# nn.BatchNorm1d(hsize),
 		)
 
 class MPRNN(GRNN):
@@ -58,20 +65,31 @@ class MPRNN(GRNN):
 
 		rnnmdl=RNN_MIN,
 		mpnmdl=MP_THIN,
+		single_mpn=False,
 		verbose=False):
-		super(MPRNN, self).__init__(len(nodes), hidden_size, rnnmdl)
+		super().__init__(len(nodes), hidden_size, rnnmdl)
 
 		self.adj = adj
 		self.nodes = nodes
 
 		# follows a canonical order as defined by input order of nodes
+		self.single_mpn = single_mpn
+
 		mpns_list = []
 		self.mpn_ind = {}
-		for nname in nodes:
-			adjnames = adj[nname]
-			if len(adjnames):
-				self.mpn_ind[nname] = len(mpns_list)
-				mpns_list.append(mpnmdl(hsize=hidden_size))
+		if single_mpn:
+			# defines a single global messaging rule for all nodes
+			mpns_list = [mpnmdl(hsize=hidden_size)]
+			for nname in nodes:
+				adjnames = adj[nname]
+				if len(adjnames):
+					self.mpn_ind[nname] = 0
+		else:
+			for nname in nodes:
+				adjnames = adj[nname]
+				if len(adjnames):
+					self.mpn_ind[nname] = len(mpns_list)
+					mpns_list.append(mpnmdl(hsize=hidden_size))
 		self.mpns = nn.ModuleList(mpns_list)
 		self.mpns_list = mpns_list
 
