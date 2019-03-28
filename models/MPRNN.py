@@ -27,26 +27,22 @@ class MP_DENSE(MP_THIN):
 		self.msg_op = nn.Sequential(
 			nn.Linear(hsize*2, hsize),
 			nn.ReLU(),
+			# nn.Linear(hsize, hsize),
+			# nn.ReLU(),
 			nn.Linear(hsize, hsize),
-			nn.ReLU(),
-			# nn.Dropout(0.5),
-			nn.Linear(hsize, hsize),
+			# nn.ReLU(),
 		)
 		self.upd_op = nn.Sequential(
 			nn.Linear(hsize*2, hsize),
-			nn.ReLU(),
-			nn.Linear(hsize, hsize),
+			# nn.ReLU(),
+			# nn.Linear(hsize, hsize),
+			# nn.ReLU(),
 		)
 		self.lossy = nn.Sequential(
 			nn.ReLU(),
 			nn.Dropout(0.5),
-			# nn.ReLU(),
 			# nn.Linear(hsize, hsize),
 			# nn.ReLU(),
-			# nn.Dropout(0.5),
-			# nn.Linear(hsize, hsize),
-			# nn.ReLU(),
-			# nn.BatchNorm1d(hsize),
 		)
 
 class MPRNN(GRNN):

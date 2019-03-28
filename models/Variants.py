@@ -51,7 +51,10 @@ class MPRNN_ITER(MPRNN):
 					self.mpns_list.append(mpnmdl(hsize=hidden_size))
 				self.mpns = nn.ModuleList(self.mpns_list)
 			else:
+				# print(self.mpn_ind)
 				for nname in nodes:
+					if not len(adj[nname]):
+						continue
 					ind = self.mpn_ind[nname]
 					newmap[0][nname] = ind
 					for it in range(1, iters):
@@ -59,6 +62,14 @@ class MPRNN_ITER(MPRNN):
 						self.mpns_list.append(mpnmdl(hsize=hidden_size))
 				self.mpns = nn.ModuleList(self.mpns_list)
 			self.mpn_ind = newmap
+		else:
+			pass
+			# newmap = {}
+			# for it in range(iters):
+			# 	newmap[it] = { k: v for k, v in self.mpn_ind.items() }
+
+			# # TODO: single_mpn
+			# self.mpn_ind = newmap
 
 		if verbose:
 			print('MPRNN_ITER')
@@ -96,8 +107,11 @@ class MPRNN_ITER(MPRNN):
 			# only defined over nodes w/ adj
 			if msg is None: continue
 
-			# NOTE: indexed by iteration
-			mpn = self.mpns[self.mpn_ind[it][nname]]
+			if self.iter_indep:
+				# NOTE: indexed by iteration
+				mpn = self.mpns[self.mpn_ind[it][nname]]
+			else:
+				mpn = self.mpns[self.mpn_ind[nname]]
 
 			uval = mpn.upd(hval, msg)
 			if it == self.iters-1:
@@ -204,16 +218,13 @@ class RNN_HDN(RNN_MIN):
 		hsize = hidden_size
 		self.inp = nn.Sequential(
 			nn.Linear(self.insize + hsize, hsize),
-			nn.ReLU(),
-			# nn.Linear(hsize, hsize),
 			# nn.ReLU(),
-			nn.Linear(hsize, hsize),
+			# nn.Linear(hsize, hsize),
+			# nn.ReLU(), # relu input to LSTM
 		)
 		self.out = nn.Sequential(
-			nn.Linear(hsize, hsize),
-			# nn.ReLU(),
 			# nn.Linear(hsize, hsize),
-			nn.ReLU(),
+			# nn.ReLU(),
 			nn.Linear(hsize, self.outsize),
 		)
 
@@ -237,6 +248,8 @@ class MPRNN_FCAST(MPRNN_ITER):
 
 		fringes = find_fringes(nodes, adj, twoway=True)
 		nodes, adj = complete_graph(nodes, adj)
+		# nodes, adj = causal_graph(nodes, adj)
+		# nodes, adj = reverse_graph(nodes, adj)
 		super().__init__(
 			nodes, adj,
 			iters,
