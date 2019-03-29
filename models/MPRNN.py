@@ -28,7 +28,6 @@ class MP_DENSE(MP_THIN):
 			nn.Linear(hsize*2, hsize),
 			nn.ReLU(),
 			nn.Linear(hsize, hsize),
-			nn.ReLU(),
 		)
 		self.upd_op = nn.Sequential(
 			nn.Linear(hsize*2, hsize),
