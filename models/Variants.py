@@ -199,8 +199,8 @@ class MP_DEEP(MP_DENSE):
 			nn.Linear(hsize*2, hsize),
 			nn.ReLU(),
 			nn.Linear(hsize, hsize),
-			nn.ReLU(),
-			nn.Linear(hsize, hsize),
+			# nn.ReLU(),
+			# nn.Linear(hsize, hsize),
 		)
 
 class RNN_HDN(RNN_MIN):
@@ -210,8 +210,6 @@ class RNN_HDN(RNN_MIN):
 		hsize = hidden_size
 		self.inp = nn.Sequential(
 			nn.Linear(self.insize + hsize, hsize),
-			nn.ReLU(),
-			nn.Linear(hsize, hsize),
 		)
 		self.out = nn.Sequential(
 			nn.Linear(hsize, hsize),
