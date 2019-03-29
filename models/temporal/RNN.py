@@ -8,7 +8,7 @@ from utils import *
 class RNN_MIN(nn.Module):
 	name = 'rnn'
 	def __init__(self, hidden_size=256, steps=10):
-		super(RNN_MIN, self).__init__()
+		super().__init__()
 
 		self.lag = 5 # min needed for inference
 		self.steps = steps # spatial dimension (optional ?)
@@ -88,7 +88,7 @@ class RNN_MIN(nn.Module):
 class RNN(RNN_MIN):
 	name = 'rnn'
 	def __init__(self, hidden_size=256, steps=10):
-		super(RNN, self).__init__(hidden_size, steps)
+		super().__init__(hidden_size, steps)
 
 		hsize = hidden_size
 		self.inp = nn.Sequential(
@@ -106,7 +106,7 @@ class RNN(RNN_MIN):
 
 class RNN_SNG(RNN_MIN):
 	def __init__(self, hidden_size=128, steps=1):
-		super(RNN_SNG, self).__init__(hidden_size, steps)
+		super().__init__(hidden_size, steps)
 
 		hsize = hidden_size
 		self.inp = nn.Sequential(
@@ -126,7 +126,7 @@ class RNN_SNG(RNN_MIN):
 class RNN_FCAST(RNN):
 
 	def __init__(self, nodes, adj, hidden_size=256, steps=10):
-		super(RNN_FCAST, self).__init__(hidden_size, steps)
+		super().__init__(hidden_size, steps)
 
 		fringes = find_fringes(nodes, adj, twoway=True)
 		# nodes, adj = complete_graph(nodes, adj)
