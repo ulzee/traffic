@@ -211,6 +211,18 @@ class MP_DEEP(MP_THIN):
 			nn.Linear(hsize, hsize),
 		)
 
+class MP_DEEP(MP_DENSE):
+	def __init__(self, hsize):
+		super().__init__(hsize)
+
+		self.msg_op = nn.Sequential(
+			nn.Linear(hsize*2, hsize),
+			nn.ReLU(),
+			nn.Linear(hsize, hsize),
+			# nn.ReLU(),
+			# nn.Linear(hsize, hsize),
+		)
+
 class RNN_HDN(RNN_MIN):
 	def __init__(self, hidden_size=256, steps=10):
 		super().__init__(hidden_size, steps)
@@ -218,14 +230,10 @@ class RNN_HDN(RNN_MIN):
 		hsize = hidden_size
 		self.inp = nn.Sequential(
 			nn.Linear(self.insize + hsize, hsize),
-			# nn.ReLU(),
-			# nn.Linear(hsize, hsize),
-			# nn.ReLU(), # relu input to LSTM
 		)
 		self.out = nn.Sequential(
 			nn.Linear(hsize, hsize),
 			nn.ReLU(),
-			nn.Dropout(0.5),
 			nn.Linear(hsize, self.outsize),
 		)
 

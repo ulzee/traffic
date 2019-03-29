@@ -272,7 +272,10 @@ class SpotHistory(data.Dataset):
 			data_path=PARSED_PATH,
 			preproc='s',
 			split=0.8,
-			smooth=1.5,
+
+			smooth=1.2,
+			ignore_missing=True,
+
 			clip_hours=5,
 			norm=(12, 10), # raw mean, scale
 			shuffle=True,
@@ -322,6 +325,7 @@ class SpotHistory(data.Dataset):
 			all_avail[ii].append(vlists)
 
 		# align the speeds
+		tfill = nanfill if ignore_missing and lag is not None else constfill
 		self.rawdata = []
 		self.trange = []
 		for ii, (day, gathered, vlists) in enumerate(all_avail):
@@ -333,7 +337,6 @@ class SpotHistory(data.Dataset):
 					t0 = s2d(segvs[0]['time'])
 				if s2d(segvs[-1]['time']) < tf:
 					tf = s2d(segvs[-1]['time'])
-			# print(t0, tf)
 
 			dt = tf - t0
 			tsteps = dt.seconds // (60 * res) + 1
@@ -363,13 +366,24 @@ class SpotHistory(data.Dataset):
 		self.data = self.data[:tsplit] if mode == 'train' else self.data[tsplit:]
 
 		if lag is not None:
+			complete_samples = 0
+			total = 0
 			ldata = self.data
 			stride = 1
 			self.data = []
+			nans = []
 			for series in ldata:
 				for ti in range(lag, len(series), stride):
 					seg = series[ti-lag:ti]
-					self.data.append(seg)
+					nans.append(np.count_nonzero(np.isnan(seg)))
+					if np.count_nonzero(np.isnan(seg)) == 0:
+						self.data.append(seg)
+						complete_samples +=1
+					total += 1
+			# import matplotlib.pyplot as plt
+			# plt.figure(figsize=(14, 3))
+			# plt.plot(sorted(nans))
+			# plt.show(); plt.close()
 
 		if shuffle:
 			npshuff(self.data)
@@ -382,6 +396,8 @@ class SpotHistory(data.Dataset):
 			for segname, ls in zip(segments, byseg):
 				print('    * [%s]: %d' % (segname, len(ls)))
 			print(' [*] Examples (%s): %d' % (mode, len(self.data)))
+			if lag is not None:
+				print(' [*] No missing: %d/%d' % (complete_samples,total))
 			tsteps = sorted(list(byday.keys()))
 			print(' [*] Time range: %s ~ %s' % (tsteps[0], tsteps[-1]))
 

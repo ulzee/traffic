@@ -449,6 +449,10 @@ def strip_seg(ls,
 	# 	ls = ls[:ii]
 	# return ls
 
+def get_lr(optimizer):
+	for param_group in optimizer.param_groups:
+		return param_group['lr']
+
 def remove_stops(ls, minv=0.05):
 	vs = np.array([obj['vel'] for obj in ls])
 	for ii in range(1, len(ls)-1):
@@ -710,7 +714,7 @@ def hdiff(r1, r2):
 
 s2d = lambda secs: datetime.fromtimestamp(secs)
 
-def tfill(tvlist, res):
+def constfill(tvlist, res):
 	t0 = datetime.fromtimestamp(tvlist[0]['time'])
 	tf = datetime.fromtimestamp(tvlist[-1]['time'])
 	dt = tf - t0
@@ -723,6 +727,31 @@ def tfill(tvlist, res):
 		# fill previous if missing
 		while len(vs) < tind:
 			vs.append(vs[-1])
+
+		vs.append(entry['vel'])
+	assert tsteps == len(vs)
+
+	return vs
+
+def nanfill(tvlist, res):
+	t0 = datetime.fromtimestamp(tvlist[0]['time'])
+	tf = datetime.fromtimestamp(tvlist[-1]['time'])
+	dt = tf - t0
+	tsteps = dt.seconds // (60 * res) + 1
+	vs = []
+	for entry in tvlist:
+		te = datetime.fromtimestamp(entry['time'])
+		tind = (te - t0).seconds // (60 * res)
+
+		# fill previous if missing
+		it = 0
+		while len(vs) < tind:
+			if it < 6:
+				# fill at least 1
+				vs.append(vs[-1])
+			else:
+				vs.append(np.nan)
+			it += 1
 
 		vs.append(entry['vel'])
 	assert tsteps == len(vs)
@@ -778,18 +807,14 @@ def prune_graph(vs, adj, validf, minv=0.5):
 
     return pvs, padj
 
-def rev_graph(vs, adj):
-	rvs = vs
-	radj = {}
+def reverse_graph(vs, adj):
+	radj = { v:list() for v in vs }
+	for vert, ls in adj.items():
+		for dest in ls:
+			if vert not in radj[dest]:
+				radj[dest].append(vert)
 
-	for vert in vs:
-		if vert not in radj: radj[vert] = []
-		for child in adj[vert]:
-			if child not in radj: radj[child] = []
-			if vert not in radj[child]:
-				radj[child].append(vert)
-
-	return rvs, radj
+	return vs, radj
 
 def complete_graph(vs, adj):
 	rvs = vs
@@ -806,6 +831,43 @@ def complete_graph(vs, adj):
 				radj[vert].append(child)
 
 	return rvs, radj
+
+def causal_graph(vs, adj):
+	# rvs = vs
+	cadj = {}
+	# cadj = { v:list() for v in vs }
+
+	# downstream
+	queue = [vs[0]]
+	visited = {}
+	while len(queue):
+		head = queue.pop(0)
+		visited[head] = True
+		for child in adj[head]:
+			if child not in cadj:
+				cadj[child] = list()
+			if head not in cadj[child]:
+				cadj[child].append(head)
+			if child not in visited:
+				queue.append(child)
+	for vert in vs:
+		if vert != vs[0] and vert not in cadj:
+			cadj[vert] = adj[vert]
+	cadj[vs[0]] = [] # root causes nothing
+
+	return vs, cadj
+
+	# # for vert in vs:
+	# # 	if vert not in radj: radj[vert] = []
+	# # 	for child in adj[vert]:
+	# # 		if child not in radj: radj[child] = []
+
+	# # 		if vert not in radj[child]:
+	# # 			radj[child].append(vert)
+	# # 		if child not in radj[vert]:
+	# # 			radj[vert].append(child)
+
+	# return rvs, radj
 
 def render_graph(name, vs, adj, save=True, path='jobs/outputs'):
 	with open('../shiva-traffic/Valid-Counts.txt') as fl:
@@ -928,3 +990,32 @@ def find_hops_2way(hops, vs, adj):
 				depth
 			))
 	return graphs
+
+def compute_depth(vs, adj):
+	queue = [vs[0]]
+	visited = {}
+	depth = { vs[0]: 0 }
+	while len(queue):
+		head = queue.pop(0)
+		visited[head] = True
+		for child in adj[head]:
+			if child not in visited:
+				queue.append(child)
+				depth[child] = depth[head] + 1
+
+	revadj = { vert: list() for vert in vs }
+	for source, ls in adj.items():
+		for dest in ls:
+			if source not in revadj[dest]:
+				revadj[dest].append(source)
+
+	queue = [vs[0]]
+	while len(queue):
+		head = queue.pop(0)
+		visited[head] = True
+		for child in revadj[head]:
+			if child not in visited:
+				queue.append(child)
+				depth[child] = depth[head] + 1
+
+	return depth
