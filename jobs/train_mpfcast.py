@@ -96,8 +96,7 @@ if hops > 1:
     print('With trasnfer:')
     model.load_prior()
     _ = evf()
-
-lock_subgraph(True)
+    lock_subgraph(True)
 
 def get_lr(optimizer):
     for param_group in optimizer.param_groups:
@@ -121,7 +120,6 @@ for eii  in range(EPS):
 
         outputs = model(Xs)
 
-        t0 = time()
         opt.zero_grad()
         loss = criterion(outputs, Ys)
         loss.backward()
