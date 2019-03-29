@@ -25,8 +25,8 @@ SROUTE, ADJ = read_graph(graph_file,
 # SROUTE, ADJ = complete_graph(SROUTE, ADJ)
 # graph = show_graph(SROUTE, ADJ)
 
-EPS = 12
-LAG = 24 + 1
+EPS = 10
+LAG = 18 + 1
 hops = int(graph_file[:-5].split('_n')[1])
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -42,7 +42,7 @@ from models.temporal.RNN import *
 from models.MPRNN import *
 from models.Variants import *
 
-HSIZE = 64
+HSIZE = 128
 # AUTO_ITER = hops + 1
 AUTO_ITER = 3
 
