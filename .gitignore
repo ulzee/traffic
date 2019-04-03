@@ -2,7 +2,11 @@
 temp*
 Valid-Counts-Sorted.txt
 process/images
-eval
+#eval
+*.html
+*.jpg
+*.png
+*.json
 __pycache__/
 *.py[cod]
 *$py.class

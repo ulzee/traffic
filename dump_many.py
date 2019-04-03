@@ -19,38 +19,36 @@ from glob import glob
 from utils import *
 import json
 
-with open('data/top_allstops.json') as fl:
+def by(line):
+	try:
+		fobj = fmt(line)
+		bus_id = fobj['routeid'].split('_')[1]
+		if 'X' not in bus_id:
+			return fobj
+	except:
+		print('WARN: Skipping line with missing columns...')
+		print('>', line)
+		# assert False
+	return None
+
+with open('data/manh_stops.json') as fl:
 	all_stops = json.load(fl)
 
 mtafiles = sorted(glob('/home/ubuntu/datasets-aux/mta/*.txt'))
 start = int(sys.argv[2])
+end = int(sys.argv[3])
 mode = 'msr'.index(sys.argv[1])
-mtafiles = mtafiles[start:start+10]
-if len(sys.argv) > 3:
-	skipto = sys.argv[3]
-	sind = all_stops.index(skipto)
-	all_stops = all_stops[sind:]
-	print('SKipping to:', sind)
+mtafiles = mtafiles[start:end]
+# if len(sys.argv) > 3:
+# 	skipto = sys.argv[3]
+# 	sind = all_stops.index(skipto)
+# 	all_stops = all_stops[sind:]
+# 	print('SKipping to:', sind)
 
 for fii, fname in enumerate(mtafiles):
 	ftag = fname.split('.')[1]
 
-	raw_seghist = []
-	li = 0
-	with open(fname) as fl:
-		_ = fl.readline()
-		line = fl.readline()
-		while line:
-			if 'NULL' not in line and 'IN_PROGRESS' in line:
-				try:
-					raw_seghist.append(fmt(line))
-				except:
-					print(line)
-					assert False
-			line = fl.readline()
-			li += 1
-			if li % 10000 == 0:
-				sys.stdout.write('%d/5000000   \r' % li)
+	raw_seghist = collect(by, fname)
 
 	print('%d/%d' % (fii+1, len(mtafiles)))
 	for stop in tqdm(all_stops):
@@ -59,7 +57,7 @@ for fii, fname in enumerate(mtafiles):
 		segstr = '\n'.join([st, ed])
 		matches = []
 		dirs = []
-		sfiles = glob('data/stopcodes_sequence/*.txt')
+		sfiles = glob('data/safe_stopcodes/*.txt')
 		for sname in sfiles:
 			if 'X' in sname:
 				continue

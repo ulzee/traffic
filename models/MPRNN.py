@@ -125,11 +125,11 @@ class MPRNN(GRNN):
 
 		print('Matched: %d params' % match)
 
-	def load(self, wpath=None):
+	def load(self, wpath=None, verbose=True):
 		if wpath is None:
 			wpath = self.ckpt_path()
 
-		print('Loading:', wpath)
+		if verbose: print('Loading:', wpath)
 		self.load_state_dict(torch.load(wpath))
 
 	def save(self):

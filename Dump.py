@@ -58,7 +58,7 @@ print(matches)
 
 mtafiles = sorted(glob('/home/ubuntu/datasets-aux/mta/*.txt'))
 start = int(sys.argv[4])
-bdir = int(sys.argv[2])
+# bdir = int(sys.argv[2])
 mode = int(sys.argv[3])
 mtafiles = mtafiles[start:start+25]
 print(len(mtafiles))
@@ -87,8 +87,10 @@ for fii, fname in tqdm(enumerate(mtafiles)):
                         assert False
             line = fl.readline()
 
-    seghist = list(filter(lambda obj: obj['direction'] == bdir, raw_seghist))
+    # seghist = list(filter(lambda obj: obj['direction'] == bdir, raw_seghist))
+    seghist = raw_seghist
     seghist = list(filter(lambda obj: obj['phase'], seghist))
+    # print('On seghist', len(seghist))
 
     bybus = group(seghist, 'busid')
 
