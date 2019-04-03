@@ -3,6 +3,7 @@ temp*
 Valid-Counts-Sorted.txt
 process/images
 #eval
+*.sh
 *.html
 *.jpg
 *.png
