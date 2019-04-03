@@ -1,4 +1,7 @@
 # Byte-compiled / optimized / DLL files
+*TUNE*
+.keys.txt
+Variants
 temp*
 Valid-Counts-Sorted.txt
 process/images
