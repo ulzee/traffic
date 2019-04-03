@@ -933,16 +933,21 @@ def subgraph(selected, vs, adj):
 
 	return selected, subadj
 
-def find_hops_2way(hops, vs, adj):
+def find_hops_2way(hops, vs, adj, overlap=True):
 	graphs = []
 	cvs, cadj = complete_graph(vs, adj)
 
+	touched = {}
 	for ri, root in enumerate(cvs):
+		if not overlap and root in touched:
+			# root unusuable, already used by another subgraph
+			continue
+
 		# search h-hops forward and backward for each root
 		visited = {}
 		frontier = dict(before=[root], after=[root])
 		depth = {root:0}
-		exceeded = False
+		incomplete = False
 
 		maxd = dict(before=0, after=0)
 		while len(frontier['before']) and len(frontier['after']):
@@ -954,12 +959,16 @@ def find_hops_2way(hops, vs, adj):
 			head = {}
 			for vert in frontier['after']:
 				if depth[vert] < hops:
+					noChild = True
 					for child in adj[vert]:
-						if child in visited: continue
+						if child in visited or child in touched: continue
 						depth[child] = depth[vert] + 1
 						if maxd['after'] < depth[child]:
 							maxd['after'] = depth[child]
 						head[child] = True
+						noChild = False
+					if noChild:
+						incomplete = True
 			head = list(head.keys())
 			frontier['after'] = head
 
@@ -969,22 +978,32 @@ def find_hops_2way(hops, vs, adj):
 			head = {}
 			for vert in frontier['before']:
 				if depth[vert] < hops:
+					noChild = True
 					for arb_child in cadj[vert]:
 						if vert in adj[arb_child]:
 							# check that predecessor points to current
 							child = arb_child
-							if child in visited: continue
+							if child in visited or child in touched: continue
 							depth[child] = depth[vert] + 1
 							if maxd['before'] < depth[child]:
 								maxd['before'] = depth[child]
 							head[child] = True
+							noChild = False
+					if noChild:
+						incomplete = True
 			head = list(head.keys())
 			frontier['before'] = head
+
+		if incomplete:
+			continue
 
 		if maxd['after'] == hops and maxd['before'] == hops:
 			verts = [root]
 			for vert in visited.keys():
 				if vert not in verts: verts.append(vert)
+			if not overlap:
+				for vert in verts:
+					touched[vert] = True
 			graphs.append((
 				subgraph(verts, vs, adj),
 				depth

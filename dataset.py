@@ -263,6 +263,11 @@ class SingleStop(LocalRoute):
 
 from scipy.ndimage.filters import gaussian_filter1d as blur1d
 
+def congestion_post(vs, clip=10):
+	vs[vs > clip] = np.log(vs[vs > clip] - clip + 1) + clip
+	# vs[vs > clip] = clip
+	return vs
+
 class SpotHistory(data.Dataset):
 	def __init__(self,
 			segments,
@@ -276,6 +281,7 @@ class SpotHistory(data.Dataset):
 			smooth=1.2,
 			ignore_missing=True,
 
+			post=None,
 			clip_hours=5,
 			norm=(12, 10), # raw mean, scale
 			shuffle=True,
@@ -290,6 +296,7 @@ class SpotHistory(data.Dataset):
 		self.norm = norm
 		self.res = res
 		self.clip_hours = clip_hours
+		self.post = post
 
 		byday = {}
 		byseg = []
@@ -349,9 +356,9 @@ class SpotHistory(data.Dataset):
 					ind += 1
 
 				vs = np.array(tfill(segvs, res))
+
 				if smooth is not None:
 					vs = blur1d(vs, sigma=smooth)
-				# vs /= norm
 				nmean, nscale = norm
 				vs = (vs - nmean) / nscale
 				vmat[:, si] = vs[ind:ind+tsteps]
@@ -366,24 +373,8 @@ class SpotHistory(data.Dataset):
 		self.data = self.data[:tsplit] if mode == 'train' else self.data[tsplit:]
 
 		if lag is not None:
-			complete_samples = 0
-			total = 0
-			ldata = self.data
-			stride = 1
-			self.data = []
-			nans = []
-			for series in ldata:
-				for ti in range(lag, len(series), stride):
-					seg = series[ti-lag:ti]
-					nans.append(np.count_nonzero(np.isnan(seg)))
-					if np.count_nonzero(np.isnan(seg)) == 0:
-						self.data.append(seg)
-						complete_samples +=1
-					total += 1
-			# import matplotlib.pyplot as plt
-			# plt.figure(figsize=(14, 3))
-			# plt.plot(sorted(nans))
-			# plt.show(); plt.close()
+			self.raw_data = self.data
+			self.data, nComplete, nTotal = self.chunks(self.data)
 
 		if shuffle:
 			npshuff(self.data)
@@ -397,12 +388,26 @@ class SpotHistory(data.Dataset):
 				print('    * [%s]: %d' % (segname, len(ls)))
 			print(' [*] Examples (%s): %d' % (mode, len(self.data)))
 			if lag is not None:
-				print(' [*] No missing: %d/%d' % (complete_samples,total))
+				print(' [*] No missing: %d/%d' % (nComplete,nTotal))
 			tsteps = sorted(list(byday.keys()))
 			print(' [*] Time range: %s ~ %s' % (tsteps[0], tsteps[-1]))
 
-			# print(' [*] %s-set size:' % mode, len(self.data))
-			# print(' [*] avg sequence: %.2f' % )
+	def chunks(self, datamat):
+		nComplete = 0
+		nTotal = 0
+		ldata = datamat
+		stride = 1
+		ls = []
+		nans = []
+		for series in ldata:
+			for ti in range(self.lag, len(series), stride):
+				seg = series[ti-self.lag:ti]
+				nans.append(np.count_nonzero(np.isnan(seg)))
+				if np.count_nonzero(np.isnan(seg)) == 0:
+					ls.append(seg)
+					nComplete +=1
+				nTotal += 1
+		return ls, nComplete, nTotal
 
 
 	def __len__(self):
@@ -417,8 +422,64 @@ class SpotHistory(data.Dataset):
 			shuffle=shuffle,
 			num_workers=2)
 
-if __name__ == '__main__':
-	dset = Routes(bsize=32, index_file='min-data.json')
+class Congestion(SpotHistory):
+
+	def __init__(self,
+			segments,
+			mode, bsize,
+			lag=6,
+			data_path=PARSED_PATH,
+			norm=(9, 10),
+			shuffle=True,
+			verbose=True,
+		):
+		super().__init__(
+			segments,
+			mode, bsize, lag=None,
+			data_path=PARSED_PATH,
+			ignore_missing=True,
+			split=0.8,
+			preproc='s', smooth=1.2, res=10,
+			post=None, clip_hours=8, norm=(0, 1),
+			shuffle=False, verbose=verbose)
+
+		def congestion(vs, clip=10):
+			vs = blur1d(vs, sigma=1.5)
+			vs[vs > clip] = np.log(vs[vs > clip] - clip + 1) + clip
+			return vs
+		# FIXME: using constfill
+		ls = []
+		for seg in self.data:
+			mat = np.array([congestion(seg[:, si]) for si in range(seg.shape[1])])
+			ls.append(mat.T)
+		self.post_data = ls
+
+		norm_mean, norm_scale = norm
+		for ii in range(len(self.data)):
+			# seg, post in zip(self.data, self.post_data):
+
+			self.data[ii] = (self.data[ii] - norm_mean) / norm_scale
+			self.post_data[ii] = (self.post_data[ii] - norm_mean) / norm_scale
+
+
+		self.lag = lag
+		if lag is not None:
+			self.data, nComplete, nTotal = self.chunks(self.data)
+			self.post_data, _, _ = self.chunks(self.post_data)
+			if verbose:
+				print(' [*] No missing: %d/%d' % (nComplete, nTotal))
+
+		if shuffle:
+			inds = list(range(len(self.data)))
+			npshuff(inds)
+			self.data = [self.data[ii] for ii in inds]
+			self.post_data = [self.post_data[ii] for ii in inds]
+
+	def __getitem__(self, index):
+		return self.data[index], self.post_data[index]
+
+# if __name__ == '__main__':
+# 	dset = Routes(bsize=32, index_file='min-data.json')
 
 	# ts = []
 	# for _ in tqdm(range(100)):
