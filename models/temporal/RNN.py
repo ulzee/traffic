@@ -10,6 +10,8 @@ class RNN_MIN(nn.Module):
 	def __init__(self, hidden_size=256, steps=10):
 		super().__init__()
 
+		self.lossy = False
+
 		self.lag = 5 # min needed for inference
 		self.steps = steps # spatial dimension (optional ?)
 		self.hidden_size = hidden_size

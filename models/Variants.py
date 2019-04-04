@@ -30,8 +30,13 @@ class MPRNN_ITER(MPRNN):
 		mpnmdl=MP_THIN,
 		single_mpn=False,
 		verbose=False):
+
+		fringes = find_fringes(nodes, adj, twoway=True)
+		nodes, adj = complete_graph(nodes, adj)
+
 		super().__init__(nodes, adj, hidden_size, rnnmdl, mpnmdl, single_mpn, verbose)
 
+		self.fringes = fringes
 		self.iters = iters
 		self.iter_indep = iter_indep
 
@@ -114,8 +119,8 @@ class MPRNN_ITER(MPRNN):
 				mpn = self.mpns[self.mpn_ind[nname]]
 
 			uval = mpn.upd(hval, msg)
-			if it == self.iters-1:
-				uval = mpn.lossy(uval)
+			# if mpn.lossy and it == self.iters-1:
+			# 	uval = mpn.lossy(uval)
 
 			# replaces hvalues before update
 			hevals[ni] = uval
@@ -217,6 +222,37 @@ class RNN_HDN(RNN_MIN):
 			nn.Linear(hsize, self.outsize),
 		)
 
+
+class RNN_LOSSY(RNN_HDN):
+	def __init__(self, hidden_size=256, steps=10):
+		super().__init__(hidden_size, steps)
+
+		self.lossy = True
+
+		hsize = hidden_size
+		self.odropout = nn.Sequential(
+			nn.ReLU(),
+			nn.Dropout(0.5),
+			nn.Linear(hsize, hsize),
+		)
+
+		self.hdropout = nn.Sequential(
+			nn.ReLU(),
+			nn.Dropout(0.5),
+			nn.Linear(hsize, hsize),
+		)
+
+
+class MP_LOSSY(MP_DENSE):
+	def __init__(self, hsize):
+		super().__init__(hsize)
+
+		self.idropout = nn.Sequential(
+			nn.ReLU(),
+			Dropout(0.5),
+			nn.Linear(hsize, hsize),
+		)
+
 class MPRNN_FCAST(MPRNN_ITER):
 	'''
 	Only observes selected nodes and propagates information to the rest
@@ -228,6 +264,7 @@ class MPRNN_FCAST(MPRNN_ITER):
 
 		iters=1,
 		iter_indep=True, # defines an independent operator corresp. to iteration level
+		observations=False,
 
 		hidden_size=256,
 		rnnmdl=RNN_HDN,
@@ -235,10 +272,6 @@ class MPRNN_FCAST(MPRNN_ITER):
 		single_mpn=False,
 		verbose=False):
 
-		fringes = find_fringes(nodes, adj, twoway=True)
-		nodes, adj = complete_graph(nodes, adj)
-		# nodes, adj = causal_graph(nodes, adj)
-		# nodes, adj = reverse_graph(nodes, adj)
 		super().__init__(
 			nodes, adj,
 			iters,
@@ -247,27 +280,47 @@ class MPRNN_FCAST(MPRNN_ITER):
 			rnnmdl, mpnmdl,
 			single_mpn, verbose)
 
-		self.fringes = fringes
+		self.observations = observations
 
 		if verbose:
 			print('FCAST')
-			print(' [*] Fringes:', fringes)
+			print(' [*] Fringes:', self.fringes)
 			print(' [*] RNN:', rnnmdl)
 			print(' [*] MPN:', mpnmdl)
 
 	def eval_hidden(self, ti, nodes, hidden):
 		hevals = []
 		for ni, (node_series, rnn, hdn) in enumerate(zip(nodes, self.rnns, hidden)):
-			if ni not in self.fringes:
-				# For others, the hidden layer persists
-				hevals.append(hdn[0].squeeze(0))
-				continue
+			if not self.observations:
+				if ni not in self.fringes:
+					# For others, the hidden layer persists
+					hevals.append(hdn[0].squeeze(0))
+					continue
 
-			# True obs. at fringes are read through a FC layer
-			value_t = node_series[ti]
-			hin = torch.cat([hdn[0].squeeze(0), value_t], dim=-1)
-			hout = rnn.inp(hin)
-			hevals.append(hout)
+				# True obs. at fringes are read through a FC layer
+				value_t = node_series[ti]
+				hin = torch.cat([hdn[0].squeeze(0), value_t], dim=-1)
+				hout = rnn.inp(hin)
+				hevals.append(hout)
+			else:
+				# if ni not in self.fringes:
+				# 	# For others, the hidden layer persists
+				# 	hevals.append(hdn[0].squeeze(0))
+				# 	continue
+
+				# True obs. at fringes are read through a FC layer
+				value_t = node_series[ti]
+				hin = torch.cat([hdn[0].squeeze(0), value_t], dim=-1)
+
+				hout = rnn.inp(hin)
+				if ni not in self.fringes:
+					# non-fringes experience dropout to simulate coarse readings
+					assert rnn.lossy
+					if rnn.lossy:
+						hout = rnn.odropout(hout)
+
+				hevals.append(hout)
+
 
 		assert len(hevals) == len(nodes)
 		return hevals

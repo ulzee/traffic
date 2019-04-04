@@ -9,6 +9,7 @@ class MP_THIN(nn.Module):
 	def __init__(self, hsize):
 		super(MP_THIN, self).__init__()
 
+		self.lossy = False
 		self.msg_op = nn.Linear(hsize*2, hsize)
 		self.upd_op = nn.Linear(hsize*2, hsize)
 
