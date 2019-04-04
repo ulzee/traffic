@@ -155,12 +155,14 @@ class MPRNN(GRNN):
 		for ni, (node_series, rnn, hdn) in enumerate(zip(nodes, self.rnns, hidden)):
 			value_t = node_series[ti]
 
-			hin = rnn.inp(value_t).unsqueeze(0)
-			hout, hdn = rnn.rnn(hin, hdn)
-			hout = hout.squeeze(0)
+			hin = rnn.inp(value_t)
+			hout = hin
+			# .unsqueeze(0)
+			# hout, hdn = rnn.rnn(hin, hdn)
+			# hout = hout.squeeze(0)
 
 			hevals.append(hout)
-			hidden[ni] = hdn # replace previous lstm params
+
 		return hevals
 
 	def eval_message(self, hevals):
@@ -198,8 +200,16 @@ class MPRNN(GRNN):
 
 	def eval_readout(self, hevals, hidden):
 		values_t = []
-		for ni, (hval, rnn) in enumerate(zip(hevals, self.rnns)):
-			values_t.append(rnn.out(hval))
+		for ni, (hval, rnn, hdn) in enumerate(zip(hevals, self.rnns, hidden)):
+
+			hin = hval.unsqueeze(0)
+			hout, hdn = rnn.rnn(hin, hdn)
+			hidden[ni] = hdn # replace previous lstm params
+			hout = hout.squeeze(0)
+
+			xout = rnn.out(hout)
+
+			values_t.append(xout)
 		return values_t
 
 	def forward(self, series, hidden=None, dump=False):
