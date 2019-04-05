@@ -26,7 +26,7 @@ SROUTE, ADJ = read_graph(graph_file,
 # graph = show_graph(SROUTE, ADJ)
 
 EPS = 10
-LAG = 18 + 1
+LAG = 24 + 1
 hops = int(graph_file[:-5].split('_n')[1])
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
