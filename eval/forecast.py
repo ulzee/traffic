@@ -41,7 +41,15 @@ def forecast_mprnn(
 	runX = bynode(run_window)
 
 	# cond. forecast
-	hidden = None
+	hidden = []
+	bsize = 1
+	hshape = (1, bsize, model.hidden_size)
+	for _ in vs:
+		# what = (torch.ones(hshape) * 0.5).to(model.device)
+		hidden.append((
+			(torch.ones(hshape) * 0.5).to(model.device),
+			(torch.ones(hshape) * 0.5).to(model.device)
+		))
 	ccast = []
 	for ti in range(data.size()[1]-1):
 		# batch x time steps x stops
