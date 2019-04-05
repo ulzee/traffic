@@ -35,8 +35,14 @@ TAG = 'mpfcast'
 # print('Saving to:')
 # print(save_path)
 
-dset = SpotHistory(SROUTE, 'train', 32, lag=LAG, res=10).generator()
-valset = SpotHistory(SROUTE, 'test', 32, lag=LAG, res=10, shuffle=False).generator()
+dset = SpotHistory(
+    SROUTE, 'train', 32,
+    clip_hours=8,
+    lag=LAG, res=10).generator()
+valset = SpotHistory(
+    SROUTE, 'test', 32,
+    clip_hours=8,
+    lag=LAG, res=10, shuffle=False).generator()
 
 from models.temporal.RNN import *
 from models.MPRNN import *
@@ -110,7 +116,7 @@ eval_mape = []
 for eii  in range(EPS):
 
     bls = []
-    sch.step()
+    # sch.step()
     print('LR', get_lr(opt))
 
     t0 = time()
