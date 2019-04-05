@@ -39,6 +39,7 @@ class MPRNN_ITER(MPRNN):
 		self.fringes = fringes
 		self.iters = iters
 		self.iter_indep = iter_indep
+		self.jitter = False
 
 		if iter_indep:
 			newmap = {}
@@ -80,6 +81,26 @@ class MPRNN_ITER(MPRNN):
 			print('MPRNN_ITER')
 			print('iters:', iters)
 			print('indep:', iter_indep)
+
+	def enable_jitter(self, enable=False):
+		self.jitter = enable
+
+	def eval_hidden(self, ti, nodes, hidden):
+		hevals = []
+		for ni, (node_series, rnn, hdn) in enumerate(zip(nodes, self.rnns, hidden)):
+			value_t = node_series[ti]
+
+			if self.jitter:
+				assert False
+				if ni not in self.fringes:
+					for bi in range(value_t.size()[0]):
+						if np.random.randint(0, 1):
+							value_t[bi] = -1
+
+			hin = rnn.inp(value_t)
+			hout = hin
+			hevals.append(hout)
+		return hevals
 
 	def eval_message(self, it, hevals):
 		msgs = []
@@ -215,6 +236,8 @@ class RNN_HDN(RNN_MIN):
 		hsize = hidden_size
 		self.inp = nn.Sequential(
 			nn.Linear(self.insize + hsize, hsize),
+			# nn.ReLU(),
+			# nn.Linear(hsize, hsize),
 		)
 		self.out = nn.Sequential(
 			nn.Linear(hsize, hsize),
@@ -223,7 +246,7 @@ class RNN_HDN(RNN_MIN):
 		)
 
 
-class RNN_LOSSY(RNN_HDN):
+class RNN_HDN_LOSSY(RNN_HDN):
 	def __init__(self, hidden_size=256, steps=10):
 		super().__init__(hidden_size, steps)
 
@@ -235,13 +258,6 @@ class RNN_LOSSY(RNN_HDN):
 			nn.Dropout(0.5),
 			nn.Linear(hsize, hsize),
 		)
-
-		self.hdropout = nn.Sequential(
-			nn.ReLU(),
-			nn.Dropout(0.5),
-			nn.Linear(hsize, hsize),
-		)
-
 
 class MP_LOSSY(MP_DENSE):
 	def __init__(self, hsize):
@@ -310,56 +326,16 @@ class MPRNN_FCAST(MPRNN_ITER):
 
 				# True obs. at fringes are read through a FC layer
 				value_t = node_series[ti]
-				hin = torch.cat([hdn[0].squeeze(0), value_t], dim=-1)
+				hin = torch.cat([hdn[0].squeeze(0).detach(), value_t], dim=-1)
 
 				hout = rnn.inp(hin)
-				if ni not in self.fringes:
-					# non-fringes experience dropout to simulate coarse readings
-					assert rnn.lossy
-					if rnn.lossy:
-						hout = rnn.odropout(hout)
+				# if ni not in self.fringes:
+				# 	# non-fringes experience dropout to simulate coarse readings
+				# 	if rnn.lossy:
+				# 		hout = rnn.odropout(hout)
 
 				hevals.append(hout)
 
-
-		assert len(hevals) == len(nodes)
-		return hevals
-
-	def eval_readout(self, hevals, hidden):
-		values_t = []
-		for ni, (hval, rnn, hdn) in enumerate(zip(hevals, self.rnns, hidden)):
-
-			hin = hval.unsqueeze(0)
-			hout, hdn = rnn.rnn(hin, hdn)
-			hout = hout.squeeze(0)
-
-			hidden[ni] = hdn
-
-			vout = rnn.out(hval)
-			values_t.append(vout)
-
-		assert len(hevals) == len(values_t)
-		return values_t
-
-class MPRNN_COMPL(MPRNN_FCAST):
-	'''
-	Observes all nodes during training
-	'''
-
-	name = 'mpcompl'
-	def eval_hidden(self, ti, nodes, hidden):
-		hevals = []
-		for ni, (node_series, rnn, hdn) in enumerate(zip(nodes, self.rnns, hidden)):
-			# if ni not in self.fringes:
-			# 	# For others, the hidden layer persists
-			# 	hevals.append(hdn[0].squeeze(0))
-			# 	continue
-
-			# True obs. at fringes are read through a FC layer
-			value_t = node_series[ti]
-			hin = torch.cat([hdn[0].squeeze(0), value_t], dim=-1)
-			hout = rnn.inp(hin)
-			hevals.append(hout)
 
 		assert len(hevals) == len(nodes)
 		return hevals

@@ -12,7 +12,7 @@ def bynode(blob):
 
 def forecast_mprnn(
 	evaldata, model, graph_file,
-	runlen=48, norm=10, norm_mean=12, target=0, plot_targets=[0], twoway=True, verbose=False, plot=True):
+	runlen=48, norm=10, explicit=False, norm_mean=12, target=0, plot_targets=[0], twoway=True, verbose=False, plot=True):
 
 	model.eval()
 
@@ -50,7 +50,10 @@ def forecast_mprnn(
 			for ni in range(len(vs)):
 				if ni not in fringes:
 					# self-predicted values are used for non-fringes
-					dslice[:, 0, ni] = ccast[-1][0, 0, ni].item()
+					if explicit:
+						dslice[:, 0, ni] = -1
+					else:
+						dslice[:, 0, ni] = ccast[-1][0, 0, ni].item()
 		Xs, _ = model.format_batch(dslice)
 
 		yhat, hidden = model(Xs, hidden=hidden, dump=True)
@@ -74,12 +77,12 @@ def forecast_mprnn(
 	err_bynode = {}
 	all_predictions = {}
 	for ni in range(len(vs)):
-		if ni not in fringes:
-			ncast = norm * tonpy(__ccast[:, :, ni].squeeze()) + norm_mean
-			all_predictions[vs[ni]] = ncast
-			nhist = norm * tonpy(data[0, :, ni]) + norm_mean
-			nerr = ((ncast - nhist[1:])**2).tolist()
-			err_bynode[ni] = nerr
+		# if ni not in fringes:
+		ncast = norm * tonpy(__ccast[:, :, ni].squeeze()) + norm_mean
+		all_predictions[vs[ni]] = ncast
+		nhist = norm * tonpy(data[0, :, ni]) + norm_mean
+		nerr = ((ncast - nhist[1:])**2).tolist()
+		err_bynode[ni] = nerr
 	if plot:
 		import matplotlib.pyplot as plt
 		for target in plot_targets:

@@ -154,15 +154,9 @@ class MPRNN(GRNN):
 		hevals = []
 		for ni, (node_series, rnn, hdn) in enumerate(zip(nodes, self.rnns, hidden)):
 			value_t = node_series[ti]
-
 			hin = rnn.inp(value_t)
 			hout = hin
-			# .unsqueeze(0)
-			# hout, hdn = rnn.rnn(hin, hdn)
-			# hout = hout.squeeze(0)
-
 			hevals.append(hout)
-
 		return hevals
 
 	def eval_message(self, hevals):

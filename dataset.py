@@ -282,7 +282,7 @@ class SpotHistory(data.Dataset):
 			ignore_missing=True,
 
 			post=None,
-			clip_hours=5,
+			clip_hours=8,
 			norm=(12, 10), # raw mean, scale
 			shuffle=True,
 			verbose=True,
@@ -371,6 +371,7 @@ class SpotHistory(data.Dataset):
 
 		tsplit = int(len(self.data) * split)
 		self.data = self.data[:tsplit] if mode == 'train' else self.data[tsplit:]
+		self.trange = self.trange[:tsplit] if mode == 'train' else self.trange[tsplit:]
 
 		if lag is not None:
 			self.raw_data = self.data

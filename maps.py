@@ -95,11 +95,67 @@ def map_manh(
 		plt.imshow(cropped)
 		plt.show(); plt.close()
 
+def draw_lines(
+		gmap, graphs, ints,
+		coords,
+		cmap,
+		subd=15, # 3 color subdivisions per segment
+	):
+
+	for (vs, adj), seg_intensity in zip(graphs, ints):
+
+		lines = []
+		stops = {}
+		for seg in vs:
+			verts = seg.split('-')
+			line = []
+			for stop in verts:
+				if stop in coords:
+					stops[stop] = coords[stop]
+					line.append(coords[stop])
+			if len(line) == 2:
+				lines.append((seg, np.array(line)))
+		assert len(lines)
+		_, radj = reverse_graph(vs, adj)
+
+		for segname, line in lines:
+			if segname not in seg_intensity:
+				continue
+
+			r1 = seg_intensity[segname]
+			# r1 = 0
+			before = [seg_intensity[child] for child in radj[segname]]
+			r0 = np.mean(before) if len(before) else r1
+			after = [seg_intensity[child] for child in adj[segname]]
+			r2 = np.mean(after) if len(after) else r1
+			# r0 = 1
+			# r2 = 1
+
+			for si in range(subd):
+				interp = (si+1) / subd
+				# print(segname, si, interp)
+				assert interp <= 1.0 and interp >= 0
+				cinterp = interp - (1/subd/2)
+				if cinterp > 0.5:
+					val = (r2 - r1) * ((cinterp - 0.5) / 0.5) + r1
+				else:
+					val = (r1 - r0) * (cinterp / 0.5) + r0
+				rgb = cmap(val)
+				rgb = (255 * np.array(rgb[:-1])).astype(np.uint8).tolist()
+				clr = '#%02x%02x%02x' % tuple(rgb)
+				lats, lngs = zip(*line)
+				lat0, latf = (lats[1] - lats[0]) * (si/subd) + lats[0], (lats[1] - lats[0]) * interp + lats[0]
+				lng0, lngf = (lngs[1] - lngs[0]) * (si/subd) + lngs[0], (lngs[1] - lngs[0]) * interp + lngs[0]
+				# if si == 1:
+				gmap.plot([lat0, latf], [lng0, lngf], clr, edge_width=3)
+
 def map_graph(
-	name, vs, adj,
+	name,
+	graphs, # list of (vs, adj) tuples
 	ints=None, # custom color intensities based on cmap
 	cmap=parula_map,
 	lines=None, colors=None, zoom=12, show=False, crop=60,
+	border=True,
 	wait=1.5,
 	opacity=0.5,
 	edge=2,
@@ -107,22 +163,21 @@ def map_graph(
 	key=None,
 	coords_file='/home/ubuntu/traffic/data/stop_coords.json'):
 
-	_, radj = reverse_graph(vs, adj)
-
 	with open(coords_file) as fl:
 		coords = json.load(fl)
 
 	stops = {}
 	lines = []
-	for seg in vs:
-		verts = seg.split('-')
-		line = []
-		for stop in verts:
-			if stop in coords:
-				stops[stop] = coords[stop]
-				line.append(coords[stop])
-		if len(line) == 2:
-			lines.append((seg, np.array(line)))
+	for vs, _ in graphs:
+		for seg in vs:
+			verts = seg.split('-')
+			line = []
+			for stop in verts:
+				if stop in coords:
+					stops[stop] = coords[stop]
+					line.append(coords[stop])
+			if len(line) == 2:
+				lines.append((seg, np.array(line)))
 	gcoords = np.array(list(stops.values()))
 
 	overlay = np.zeros((256, 256, 4)).astype(np.uint8)
@@ -150,48 +205,16 @@ def map_graph(
 			'cornflowerblue',
 			size=20, marker=False, face_alpha=1)
 
-
-
+	# for lines in group:
 	for segname, line in lines:
 		lats, lngs = zip(*line)
 		clr = '#555555' if ints is not None else 'cornflowerblue'
-		# if ints is not None:
-		# 	if segname in ints:
-		# 		rgb = cmap(ints[segname])
-		# 		rgb = (255 * np.array(rgb[:-1])).astype(np.uint8).tolist()
-		# 		clr = '#%02x%02x%02x' % tuple(rgb)
+		if ints is not None and not border:
+			continue
 		gmap.plot(lats, lngs, clr, edge_width=edge)
 
-	subd = 15 # 3 color subdivisions per segment
 	if ints is not None:
-		if segname in ints:
-			for segname, line in lines:
-				r1 = ints[segname]
-				# r1 = 0
-				before = [ints[child] for child in radj[segname]]
-				r0 = np.mean(before) if len(before) else r1
-				after = [ints[child] for child in adj[segname]]
-				r2 = np.mean(after) if len(after) else r1
-				# r0 = 1
-				# r2 = 1
-
-				for si in range(subd):
-					interp = (si+1) / subd
-					# print(segname, si, interp)
-					assert interp <= 1.0 and interp >= 0
-					cinterp = interp - (1/subd/2)
-					if cinterp > 0.5:
-						val = (r2 - r1) * ((cinterp - 0.5) / 0.5) + r1
-					else:
-						val = (r1 - r0) * (cinterp / 0.5) + r0
-					rgb = cmap(val)
-					rgb = (255 * np.array(rgb[:-1])).astype(np.uint8).tolist()
-					clr = '#%02x%02x%02x' % tuple(rgb)
-					lats, lngs = zip(*line)
-					lat0, latf = (lats[1] - lats[0]) * (si/subd) + lats[0], (lats[1] - lats[0]) * interp + lats[0]
-					lng0, lngf = (lngs[1] - lngs[0]) * (si/subd) + lngs[0], (lngs[1] - lngs[0]) * interp + lngs[0]
-					# if si == 1:
-					gmap.plot([lat0, latf], [lng0, lngf], clr, edge_width=3)
+		draw_lines(gmap, graphs, ints, coords, cmap)
 
 	gmap.draw( 'temp.html' )
 
@@ -211,6 +234,18 @@ def map_graph(
 
 	img = cv2.cvtColor(cv2.imread('%s.png' % name), cv2.COLOR_BGR2RGB)
 	cropped = img[crop:-crop, crop:-crop]
+	if ints is not None:
+		barw = 30
+		steps = 100
+		interval = (cropped.shape[0] - 40) / 100
+		cropped[20:-20, -20-barw:-20] = 0
+		y0 = cropped.shape[0] - 20
+		for st in range(steps):
+			ratio = 1 - (st+1)/steps
+			clr = (255 * np.array(cmap(ratio)[:3])).astype(np.uint8)
+			cropped[20:int(y0), -60:-20] = clr
+			y0 -= interval
+
 	cv2.imwrite('%s.png' % name, cv2.cvtColor(cropped, cv2.COLOR_RGB2BGR))
 
 	if show:
