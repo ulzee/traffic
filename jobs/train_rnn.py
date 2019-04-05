@@ -27,7 +27,7 @@ save_path = '%s/%s/%s.pth' % (CKPT_STORAGE, TAG, fileName(sys.argv[1]))
 print('Saving to:')
 print(save_path)
 
-EPS = 40
+EPS = 16
 LAG = 24 + 1
 HSIZE = 256
 STOPS = len(SROUTE)

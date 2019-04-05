@@ -34,8 +34,8 @@ HSIZE = 128
 STOPS = len(SROUTE)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-dset = SpotHistory(SROUTE, 'train', 32, lag=LAG, res=10).generator()
-evalset = SpotHistory(SROUTE, 'test', 32, lag=LAG, res=10).generator()
+dset = SpotHistory(SROUTE, 'train', 32, clip_hours=8, lag=LAG, res=10).generator()
+evalset = SpotHistory(SROUTE, 'test', 32, clip_hours=8, lag=LAG, res=10).generator()
 
 from models.Linear import *
 

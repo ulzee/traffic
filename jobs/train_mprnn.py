@@ -18,25 +18,27 @@ torch.cuda.manual_seed(0)
 np.random.seed(0)
 
 # graph file
-SROUTE, ADJ = read_graph(sys.argv[1], verbose=False, named_adj=True)
+graph_file = sys.argv[1]
+SROUTE, ADJ = read_graph(graph_file, verbose=False, named_adj=True)
 SROUTE, ADJ = complete_graph(SROUTE, ADJ)
 graph = show_graph(SROUTE, ADJ)
-render_graph(fileName(sys.argv[1]), SROUTE, ADJ)
+# render_graph(fileName(graph_file), SROUTE, ADJ)
 
 TAG = 'mprnn'
-save_path = '%s/%s/%s.pth' % (CKPT_STORAGE, TAG, fileName(sys.argv[1]))
+save_path = '%s/%s/%s.pth' % (CKPT_STORAGE, TAG, fileName(graph_file))
 print('Saving to:')
 print(save_path)
 
 DENSE = False
-EPS = 40
+EPS = 16
 LAG = 24 + 1
+hops = int(graph_file[:-5].split('_n')[1])
 HSIZE = 128
 STOPS = len(SROUTE)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-dset = SpotHistory(SROUTE, 'train', 32, lag=LAG, res=10).generator()
-evalset = SpotHistory(SROUTE, 'test', 32, lag=LAG, res=10).generator()
+dset = SpotHistory(SROUTE, 'train', 32, clip_hours=8, lag=LAG, res=10).generator()
+evalset = SpotHistory(SROUTE, 'test', 32, clip_hours=8, lag=LAG, res=10).generator()
 
 from models.temporal.RNN import *
 from models.MPRNN import *
@@ -49,6 +51,8 @@ model = MPRNN(
 	mpnmdl=MP_DENSE,
 
 	verbose=True).to(device)
+model.hops = hops
+
 model.device = device
 model.clear_stats()
 criterion, opt, sch = model.params(lr=0.001)
@@ -58,7 +62,7 @@ evf = lambda: evaluate(
 
 
 print('Pre-evaluate:')
-_ = evf()
+best_eval = evf()
 
 print('Train:')
 train_mse = []
@@ -91,9 +95,17 @@ for eii  in range(EPS):
 		))
 	sys.stdout.write('\n')
 
-	eval_mse.append(evf())
+	last_eval = evf()
+	if last_eval < best_eval:
+		print('Saving: %.3f > %.3f' % (best_eval, last_eval))
+		best_eval = last_eval
+		model.save()
+
+	eval_mse.append(last_eval)
 	sys.stdout.flush()
-	# sch.step()
+
+print('Loading last best: %.2f' % best_eval)
+model.load()
 
 viewset = SpotHistory(SROUTE, 'test', 18, lag=None, res=10, shuffle=False, verbose=False)
 def xfmt(datain):
@@ -103,8 +115,9 @@ model.steps = len(SROUTE)
 sqerr = eval_rnn(viewset, model, plot=False, xfmt=xfmt)
 print('Eval MSE: %.4f' % np.mean(sqerr))
 
-torch.save(model, save_path)
-with open('%s/%s/%s_log.json' % (LOG_PATH, TAG, fileName(sys.argv[1])), 'w') as fl:
+# torch.save(model, save_path)
+
+with open('%s/%s/%s_log.json' % (LOG_PATH, TAG, fileName(graph_file)), 'w') as fl:
 	json.dump([
 		eval_mse,
 		train_mse,
