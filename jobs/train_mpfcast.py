@@ -25,7 +25,7 @@ SROUTE, ADJ = read_graph(graph_file,
 # SROUTE, ADJ = complete_graph(SROUTE, ADJ)
 # graph = show_graph(SROUTE, ADJ)
 
-EPS = 10
+EPS = 16
 LAG = 24 + 1
 hops = int(graph_file[:-5].split('_n')[1])
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -149,14 +149,15 @@ for eii  in range(EPS):
     sys.stdout.write('\n')
 
     last_eval = evf()
-    print('Last best:', best_eval, '(now: %.2f)' % last_eval)
     if last_eval < best_eval:
+        print('Saving: %.3f > %.3f' % (best_eval, last_eval))
         best_eval = last_eval
-    eval_mse.append(last_eval)
+        model.save()
 
+    eval_mse.append(last_eval)
     sys.stdout.flush()
 
-model.save()
+    # TODO: unlock all nodes
 
 with open('%s/%s/%s_log.json' % (LOG_PATH, TAG, fileName(sys.argv[1])), 'w') as fl:
 	json.dump([
