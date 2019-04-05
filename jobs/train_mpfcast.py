@@ -67,7 +67,8 @@ model.device = device
 model.hops = hops
 
 criterion, opt, sch = model.params(lr=0.001)
-sch = optim.lr_scheduler.StepLR(opt, step_size=4, gamma=0.5)
+sch = optim.lr_scheduler.StepLR(opt, step_size=1, gamma=0.5)
+sch.step()
 
 def lock_subgraph(lock=True):
     pfile = graph_file.replace('_n%d' % hops, '_n%d' % (hops-1))
@@ -157,7 +158,10 @@ for eii  in range(EPS):
     eval_mse.append(last_eval)
     sys.stdout.flush()
 
-    # TODO: unlock all nodes
+    if eii > 12:
+        sch.step()
+        lock_subgraph(False)
+
 
 with open('%s/%s/%s_log.json' % (LOG_PATH, TAG, fileName(sys.argv[1])), 'w') as fl:
 	json.dump([
