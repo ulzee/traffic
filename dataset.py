@@ -345,13 +345,22 @@ class SpotHistory(data.Dataset):
 				if s2d(segvs[-1]['time']) < tf:
 					tf = s2d(segvs[-1]['time'])
 
+			if t0 > tf:
+				# skip days with no parallel times
+				continue
+
 			dt = tf - t0
 			tsteps = dt.seconds // (60 * res) + 1
 			vmat = np.zeros((tsteps, len(vlists)))
+			# print(t0, tf)
 
 			for si, segvs in enumerate(vlists):
 				# seek until t0 begins
 				ind = 0
+				# print(ii, si, t0)
+				# print(s2d(segvs[0]['time']))
+				# print(s2d(segvs[-1]['time']))
+				# print(len(segvs), tsteps)
 				while s2d(segvs[ind]['time']) < t0:
 					ind += 1
 
