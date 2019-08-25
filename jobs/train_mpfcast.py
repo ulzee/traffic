@@ -19,22 +19,22 @@ torch.cuda.manual_seed(0)
 np.random.seed(0)
 
 graph_file = sys.argv[1]
-
 SROUTE, ADJ = read_graph(graph_file,
                          verbose=False, named_adj=True)
+segname = SROUTE[0]
 # SROUTE, ADJ = complete_graph(SROUTE, ADJ)
 # graph = show_graph(SROUTE, ADJ)
 
 EPS = 16
 LAG = 24 + 1
 hops = int(graph_file[:-5].split('_n')[1])
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 
 TAG = 'mpfcast'
 # save_path = '%s/%s/%s.pth' % (CKPT_STORAGE, TAG, fileName(sys.argv[1]))
 # print('Saving to:')
 # print(save_path)
-
+save_path = None
 dset = SpotHistory(
     SROUTE, 'train', 32,
     clip_hours=8,
@@ -48,9 +48,15 @@ from models.temporal.RNN import *
 from models.MPRNN import *
 from models.Variants import *
 
+AUTO_ITER = 3
+ITER_TEST = False
+if len(sys.argv) > 2:
+    ITER_TEST = True
+    AUTO_ITER = int(sys.argv[2])
+    # save_tag = int(sys.argv[3])
+
 HSIZE = 128
 # AUTO_ITER = hops + 1
-AUTO_ITER = 3
 
 model = MPRNN_FCAST(
     nodes=SROUTE, adj=ADJ,
@@ -99,7 +105,7 @@ evf = lambda: evaluate(
 print('Pre-evaluate:')
 best_eval = evf()
 
-if hops > 1:
+if hops > 1 and not ITER_TEST:
     print('With trasnfer:')
     model.load_prior()
     _ = evf()
@@ -153,7 +159,15 @@ for eii  in range(EPS):
     if last_eval < best_eval:
         print('Saving: %.3f > %.3f' % (best_eval, last_eval))
         best_eval = last_eval
-        model.save()
+        if ITER_TEST:
+            model.save(
+                wpath='../datasets-aux/checkpoints/iters/%s_n%d_i%d.pth' % (
+                    segname,
+                    hops,
+                    AUTO_ITER,
+                ))
+        else:
+            model.save()
 
     eval_mse.append(last_eval)
     sys.stdout.flush()

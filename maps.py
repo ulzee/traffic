@@ -96,7 +96,7 @@ def map_manh(
 		plt.show(); plt.close()
 
 def draw_lines(
-		gmap, graphs, ints,
+		gmap, graphs, ints, edge,
 		coords,
 		cmap,
 		subd=15, # 3 color subdivisions per segment
@@ -147,18 +147,19 @@ def draw_lines(
 				lat0, latf = (lats[1] - lats[0]) * (si/subd) + lats[0], (lats[1] - lats[0]) * interp + lats[0]
 				lng0, lngf = (lngs[1] - lngs[0]) * (si/subd) + lngs[0], (lngs[1] - lngs[0]) * interp + lngs[0]
 				# if si == 1:
-				gmap.plot([lat0, latf], [lng0, lngf], clr, edge_width=3)
+				gmap.plot([lat0, latf], [lng0, lngf], clr, edge_width=edge)
 
 def map_graph(
 	name,
 	graphs, # list of (vs, adj) tuples
 	ints=None, # custom color intensities based on cmap
 	cmap=parula_map,
-	lines=None, colors=None, zoom=12, show=False, crop=60,
+	lines=None, colors=None, zoom=12, show=False, crop=(60, 60),
 	border=True,
 	wait=1.5,
 	opacity=0.5,
 	edge=2,
+	decorator=None,
 	scatter=False,
 	key=None,
 	coords_file='/home/ubuntu/traffic/data/stop_coords.json'):
@@ -214,7 +215,7 @@ def map_graph(
 		gmap.plot(lats, lngs, clr, edge_width=edge)
 
 	if ints is not None:
-		draw_lines(gmap, graphs, ints, coords, cmap)
+		draw_lines(gmap, graphs, ints, edge, coords, cmap)
 
 	gmap.draw( 'temp.html' )
 
@@ -222,6 +223,7 @@ def map_graph(
 	chrome_options = Options()
 	chrome_options.add_argument("--headless")
 	chrome_options.add_argument("--no-sandbox")
+	chrome_options.add_argument("--window-size=1920,1080")
 
 	driver = webdriver.Chrome(
 		options = chrome_options)
@@ -233,7 +235,8 @@ def map_graph(
 	driver.quit()
 
 	img = cv2.cvtColor(cv2.imread('%s.png' % name), cv2.COLOR_BGR2RGB)
-	cropped = img[crop:-crop, crop:-crop]
+	crop_x, crop_y = crop
+	cropped = img[crop_y:-crop_y, crop_x:-crop_x]
 	if ints is not None:
 		barw = 30
 		steps = 100
@@ -245,6 +248,9 @@ def map_graph(
 			clr = (255 * np.array(cmap(ratio)[:3])).astype(np.uint8)
 			cropped[20:int(y0), -60:-20] = clr
 			y0 -= interval
+
+	if decorator is not None:
+		cropped = decorator(cropped)
 
 	cv2.imwrite('%s.png' % name, cv2.cvtColor(cropped, cv2.COLOR_RGB2BGR))
 

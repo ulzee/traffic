@@ -29,10 +29,11 @@ class MPRNN_ITER(MPRNN):
 		rnnmdl=RNN_MIN,
 		mpnmdl=MP_THIN,
 		single_mpn=False,
+		causality='complete_graph',
 		verbose=False):
 
 		fringes = find_fringes(nodes, adj, twoway=True)
-		nodes, adj = complete_graph(nodes, adj)
+		nodes, adj = eval('%s(nodes, adj)' % causality) #causality(nodes, adj)
 
 		super().__init__(nodes, adj, hidden_size, rnnmdl, mpnmdl, single_mpn, verbose)
 
@@ -81,6 +82,7 @@ class MPRNN_ITER(MPRNN):
 			print('MPRNN_ITER')
 			print('iters:', iters)
 			print('indep:', iter_indep)
+			print('caus:', causality)
 
 	def enable_jitter(self, enable=False):
 		self.jitter = enable
@@ -286,6 +288,7 @@ class MPRNN_FCAST(MPRNN_ITER):
 		rnnmdl=RNN_HDN,
 		mpnmdl=MP_DENSE,
 		single_mpn=False,
+		causality='complete_graph',
 		verbose=False):
 
 		super().__init__(
@@ -294,7 +297,7 @@ class MPRNN_FCAST(MPRNN_ITER):
 			iter_indep,
 			hidden_size,
 			rnnmdl, mpnmdl,
-			single_mpn, verbose)
+			single_mpn, causality, verbose)
 
 		self.observations = observations
 

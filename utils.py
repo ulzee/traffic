@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
+from scipy.stats import pearsonr as pc
 
 segkey = lambda s1, s2: '%s-%s' % (s1, s2)
 
@@ -142,12 +143,16 @@ def lagdiff(many, lag=1):
 			diff[ii, ti] = series[ii+1] - series[ii]
 	return diff
 
-def eval_lin(viewset, model, fmax=10, meval=None, test_lag=5, target=0, norm=10, diff=None, plot=True):
+def eval_lin(viewset, model, fmax=10, pcc=False, meval=None, test_lag=5, target=0, norm=10, diff=None, plot=True):
 	import matplotlib.pyplot as plt
 	# Xs, Ys = model.format_batch(viewset)
 
+	corrs = []
 	mses = []
 	for data in viewset:
+		if len(data) < test_lag * 2:
+			continue
+		# print(data.shape)
 		data = torch.Tensor(data).unsqueeze(0)
 
 		hist = tonpy(data.squeeze(0)).copy()
@@ -198,6 +203,8 @@ def eval_lin(viewset, model, fmax=10, meval=None, test_lag=5, target=0, norm=10,
 
 		ytrue = hist[test_lag:, target]
 		yguess = y_run[:, target]
+		corr, _ = pc(yguess, ytrue)
+		corrs.append(corr)
 		# print(ytrue.shape)
 		# print(yguess.shape)
 		assert len(ytrue) == len(yguess)
@@ -208,6 +215,8 @@ def eval_lin(viewset, model, fmax=10, meval=None, test_lag=5, target=0, norm=10,
 		if plot:
 			plt.title('%.4f' % np.mean(diff))
 			plt.show(); plt.close()
+	if pcc:
+		return mses, corrs
 	return mses
 
 def eval_rnn(
@@ -215,11 +224,13 @@ def eval_rnn(
 	flag=5, fmax=10,
 	target=0, norm=10,
 	plot=True,
+	pcc=False,
 	xfmt=None):
 
 	import matplotlib.pyplot as plt
 
 	losses = []
+	corrs=[]
 	plots = []
 	for data in viewset:
 		data = torch.Tensor(data).unsqueeze(0)
@@ -316,6 +327,13 @@ def eval_rnn(
 			plt.title('%.4f' % np.mean(diff))
 			plt.show(); plt.close()
 		losses += diff.tolist()
+		yhat = y_run[:-1, target]
+		ytrue = hist[1:, target]
+		assert len(yhat) is len(ytrue)
+		corr, _ = pc(yhat, ytrue)
+		corrs.append(corr)
+	if pcc:
+		return losses, corrs
 	return losses
 		# print(len(hist[:, target]), len(y_run))
 
@@ -746,11 +764,11 @@ def nanfill(tvlist, res):
 		# fill previous if missing
 		it = 0
 		while len(vs) < tind:
-			if it < 6:
-				# fill at least 1
-				vs.append(vs[-1])
-			else:
-				vs.append(np.nan)
+			# if it < 6:
+			# 	# fill at least 1
+			# 	vs.append(vs[-1])
+			# else:
+			vs.append(np.nan)
 			it += 1
 
 		vs.append(entry['vel'])

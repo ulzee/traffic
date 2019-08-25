@@ -48,6 +48,7 @@ model = MPRNN(
 	hidden_size=HSIZE,
 
 	rnnmdl=RNN,
+	# rnnmdl=RNN_MIN,
 	mpnmdl=MP_DENSE,
 
 	verbose=True).to(device)

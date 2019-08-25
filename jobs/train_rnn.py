@@ -27,11 +27,12 @@ save_path = '%s/%s/%s.pth' % (CKPT_STORAGE, TAG, fileName(sys.argv[1]))
 print('Saving to:')
 print(save_path)
 
-EPS = 16
+EPS = 1
 LAG = 24 + 1
 HSIZE = 256
 STOPS = len(SROUTE)
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+# device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 dset = SpotHistory(SROUTE, 'train', 32, lag=LAG, res=10).generator()
 evalset = SpotHistory(SROUTE, 'test', 32, lag=LAG, res=10).generator()
@@ -95,7 +96,9 @@ sqerr = eval_rnn(viewset, model, plot=False)
 print('Eval segments:', len(viewset))
 print('Eval MSE: %.4f' % np.mean(sqerr))
 
-with open('%s/%s/%s_log.json' % (LOG_PATH, TAG, fileName(sys.argv[1])), 'w') as fl:
+logfl = '%s/%s/%s_log.json' % (LOG_PATH, TAG, fileName(sys.argv[1]))
+print('Log:', logfl)
+with open(logfl, 'w') as fl:
 	json.dump([
 		eval_mse,
 		train_mse,

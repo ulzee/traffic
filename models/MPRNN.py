@@ -133,10 +133,11 @@ class MPRNN(GRNN):
 		if verbose: print('Loading:', wpath)
 		self.load_state_dict(torch.load(wpath))
 
-	def save(self):
-		sfile = self.ckpt_path()
-		print('Saving to:', sfile)
-		torch.save(self.state_dict(), sfile)
+	def save(self, wpath=None):
+		if wpath is None:
+			wpath = self.ckpt_path()
+		print('Saving to:', wpath)
+		torch.save(self.state_dict(), wpath)
 
 	def clear_stats(self):
 		pass

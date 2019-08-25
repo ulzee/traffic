@@ -28,7 +28,7 @@ print('Saving to:')
 print(save_path)
 
 DENSE = False
-EPS = 20
+EPS = 16
 LAG = 24 + 1
 HSIZE = 128
 STOPS = len(SROUTE)
@@ -91,7 +91,8 @@ sqerr = eval_lin(viewset, model, test_lag=LAG-1, fmax=10, plot=False)
 print('Eval segments:', len(viewset))
 print('Eval MSE: %.4f' % np.mean(sqerr))
 
-torch.save(model, save_path)
+torch.save(model.state_dict(), save_path)
+# torch.save(model, save_path)
 with open('%s/%s/%s_log.json' % (LOG_PATH, TAG, fileName(sys.argv[1])), 'w') as fl:
 	json.dump([
 		eval_mse,
