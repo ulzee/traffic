@@ -73,6 +73,58 @@ def dedupe(segs):
 					covered['%d-%d' % (ti+jj, si+ii)] = True
 	return unique
 
+def nan_amount(arr):
+    nans = np.isnan(arr).sum()
+    return nans / len(arr.flat)
+
+def trainable_inds(data, lag=24):
+    inds = []
+    for di, daydata in enumerate(data):
+        for hi, hrdata in enumerate(daydata):
+            if hi < lag + 1:
+                continue
+            if nan_amount(data[di][hi-lag:hi]) < 0.5:
+                if nan_amount(data[di][hi:hi+1]) < 0.5:
+                    inds.append((di, hi))
+    print('Gathered training: %d' % len(inds))
+
+    return inds
+
+def evaluate_v2(eval_inds, valset, mdl, metric, format_batch, post=None, run=None, day=None, verbose=True, lag=24):
+	mdl.eval()
+	total_loss = 0
+	total_count = 0
+	results = {}
+
+	for ii, (di, hi) in enumerate(eval_inds):
+		if hi < lag + 1:
+			continue
+		if day is not None and day != di:
+			continue
+		total_count += 1
+		with torch.no_grad():
+			batch, labels, lmasks = format_batch([(di, hi)], valset.data)
+			if post:
+				batch, labels, lmasks = post(batch, labels, lmasks)
+#             if run:
+#                 preds = run(batch)
+#             else:
+			preds = mdl(batch)
+			hblob = results.get(di, {})
+			hblob[hi] = preds
+			results[di] = hblob
+#             nanf = lambda tens: torch.isnan(tens).sum().item()
+			loss = metric(preds, labels, mask=lmasks)
+
+			lossval = loss.item()
+			total_loss += lossval
+
+			sys.stdout.write('\r[%d/%d]' % (ii, len(eval_inds)))
+		sys.stdout.flush()
+	if verbose: print('\rEval: %.7f' % (total_loss / total_count))
+
+	return total_loss / total_count
+
 def evaluate(dset, model, crit, result=False, norm=10, buff='          '):
 	from time import time
 

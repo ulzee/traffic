@@ -252,5 +252,5 @@ class MPRNN(GRNN):
 	def params(self, lr=0.001):
 		criterion = nn.MSELoss().cuda()
 		opt = optim.Adam(self.parameters(), lr=lr)
-		sch = optim.lr_scheduler.StepLR(opt, step_size=15, gamma=0.5)
+		sch = optim.lr_scheduler.StepLR(opt, step_size=2, gamma=0.5)
 		return criterion, opt, sch

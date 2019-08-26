@@ -281,6 +281,7 @@ class SpotHistory(data.Dataset):
 			smooth=1.2,
 			ignore_missing=True,
 
+			nanok=None,
 			post=None,
 			clip_hours=8,
 			norm=(12, 10), # raw mean, scale
@@ -293,6 +294,7 @@ class SpotHistory(data.Dataset):
 		self.bsize = bsize
 		self.shuffle = shuffle
 		self.lag = lag
+		self.nanok = nanok
 		self.norm = norm
 		self.res = res
 		self.clip_hours = clip_hours
@@ -408,14 +410,19 @@ class SpotHistory(data.Dataset):
 		ldata = datamat
 		stride = 1
 		ls = []
-		nans = []
+		# nans = []
 		for series in ldata:
 			for ti in range(self.lag, len(series), stride):
 				seg = series[ti-self.lag:ti]
-				nans.append(np.count_nonzero(np.isnan(seg)))
-				if np.count_nonzero(np.isnan(seg)) == 0:
-					ls.append(seg)
-					nComplete +=1
+				# nans.append(np.count_nonzero(np.isnan(seg)))
+				if self.nanok is not None:
+					if nan_amount(seg[-1, :]) < self.nanok:
+						ls.append(seg)
+						nComplete +=1
+				else:
+					if np.count_nonzero(np.isnan(seg)) == 0:
+						ls.append(seg)
+						nComplete +=1
 				nTotal += 1
 		return ls, nComplete, nTotal
 

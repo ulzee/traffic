@@ -20,7 +20,7 @@ class Linear(nn.Module):
 	def forward(self, inputs, hidden=None):
 		outputs = self.op(inputs)
 
-		return outputs
+		return outputs.unsqueeze(-1)
 
 	def params(self, lr=0.001):
 		criterion = nn.MSELoss().cuda()
