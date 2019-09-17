@@ -29,7 +29,7 @@ np.random.seed(0)
 
 parser = argparse.ArgumentParser(description='Process some integers.')
 parser.add_argument('graph', type=str)
-parser.add_argument('--epochs', type=int, default=2)
+parser.add_argument('--epochs', type=int, default=10)
 args = parser.parse_args()
 
 
@@ -37,7 +37,7 @@ args = parser.parse_args()
 segs, adjlist = read_graph(args.graph, verbose=False, named_adj=True)
 rootseg = segs[0]
 
-TAG = 'mprnn'
+TAG = 'lgcn'
 save_path = '%s/%s/%s.pth' % (CKPT_STORAGE, TAG, fileName(sys.argv[1]))
 print('Saving to:')
 print(save_path)
@@ -49,13 +49,51 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 dset = DayHistory(segs, 'train', bsize=32)#.generator()
 valset = DayHistory(segs, 'test', bsize=32)#.generator()
 
-from models.MPRNN import MPRNN
+from models.LGCN import LGCN
 
-comp_segs, comp_adj = complete_graph(segs, adjlist)
-mprnn = MPRNN(comp_segs, comp_adj, hidden_size=128, verbose=True).cuda()
-dev = torch.device('cuda:0')
-mprnn.device = dev
-criterion, opt, sch = mprnn.params(lr=0.001)
+g = dgl.DGLGraph()
+g.add_nodes(len(segs))
+source_list  = []
+sink_list = []
+iindex = { seg:ind for ind, seg in enumerate(segs) }
+for source, ls in adjlist.items():
+    # self-edges
+    source_list.append(iindex[source])
+    sink_list.append(iindex[source])
+
+    for sink in ls:
+        source_list.append(iindex[source])
+        sink_list.append(iindex[sink])
+        # TWOWAY
+        source_list.append(iindex[sink])
+        sink_list.append(iindex[source])
+g.add_edges(source_list, sink_list) # add 4 edges 0->1, 0->2, 0->3, 0->4
+# g
+
+n_edges = g.number_of_edges()
+
+# normalization
+degs = g.in_degrees().float()
+norm = torch.pow(degs, -0.5)
+norm[torch.isinf(norm)] = 0
+norm = norm.cuda()
+g.ndata['norm'] = norm.unsqueeze(1)
+# norm
+
+lgcn = LGCN(g,
+    in_feats=1,
+    n_hidden=64,
+    n_classes=1,
+    n_layers=2,
+    activation=F.relu,
+    single_rnn=False,
+    dropout=0.5).cuda()
+criterion = torch.nn.MSELoss()
+opt = torch.optim.Adam(
+    lgcn.parameters(),
+    lr=1e-3,
+    weight_decay=5e-4)
+
 
 # Train
 n2t = lambda arr: torch.from_numpy(np.array(arr)).cuda().float()
@@ -66,22 +104,18 @@ def format_batch(inds, data, squeeze=True):
     for di, hi in inds:
         X = data[di][hi-n_lag:hi].copy()
         X[np.isnan(X)] = -1
-        X = X.T
         Y = data[di][hi-n_lag+1:hi+1].copy()
-        batch.append([[n2t(step).unsqueeze(0).unsqueeze(0)
-                       for step in node] for node in X])
+        batch.append(X)
         labels.append(Y)
 
-    batch = batch[0]
-#     print(len(batch), len(batch[0]))
-#     assert False
-
-
-    labels = np.array(labels)
-    labels = n2t(labels)
+    batch = np.array(batch).swapaxes(1, 2)
+    labels = np.array(labels).swapaxes(1, 2)
+    batch = n2t(batch).squeeze(0)
+    labels = n2t(labels).squeeze(0)
 
     lmasks = ((~torch.isnan(labels))).type(torch.bool).cuda()
 
+#     print(batch.size(), labels.size())
     return batch, labels, lmasks
 
 inds = trainable_inds(dset.data)
@@ -89,20 +123,20 @@ eval_inds = trainable_inds(valset.data)
 
 print('Pre-evaluate:')
 evf = lambda: evaluate_v2(
-    eval_inds, valset, mprnn,
-    lambda preds, label, mask: criterion(preds[-1][mask[-1]], label[-1][mask[-1]]),
-    format_batch)
+	eval_inds, valset, lgcn, 
+	lambda preds, label, mask: criterion(preds[:, -1][mask[:, -1]], label[:, -1][mask[:, -1]]), 
+	format_batch)
 best_eval = evf()
 
 print('Train:')
 eval_mse = [best_eval]
 for epoch in range(args.epochs):
-	mprnn.train()
+	lgcn.train()
 	shuffle(inds)
 	for ii, (di, hi) in enumerate(inds):
 		# forward
 		batch, labels, lmasks = format_batch([(di, hi)], dset.data)
-		preds = mprnn(batch)
+		preds = lgcn(batch)
 
 		loss = criterion(preds[lmasks], labels[lmasks])
 
@@ -110,7 +144,7 @@ for epoch in range(args.epochs):
 		loss.backward()
 		opt.step()
 
-		sys.stdout.write('\r[%d/%d]: %d/%d    ' % (
+		sys.stdout.write('[%d/%d]: %d/%d  \r' % (
 			epoch+1, args.epochs,
 			ii, len(inds)))
 	sys.stdout.write('\n')
@@ -118,7 +152,7 @@ for epoch in range(args.epochs):
 
 	last_eval = evf()
 	if last_eval < best_eval:
-		torch.save(mprnn.state_dict(), save_path)
+		torch.save(lgcn.state_dict(), save_path)
 		best_eval = last_eval
 	eval_mse.append(last_eval)
 

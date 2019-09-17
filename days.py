@@ -10,6 +10,7 @@ from time import time
 from numpy.random import shuffle as npshuff
 from torch.utils import data
 from scipy.ndimage import gaussian_filter as blur
+from datetime import timedelta
 
 class DayHistory(data.Dataset):
 	def __init__(self,
@@ -27,7 +28,7 @@ class DayHistory(data.Dataset):
 			# post=None,
 			clip_hours=8,
 			norm=(12, 10), # raw mean, scale
-			shuffle=True,
+			shuffle=False,
 			verbose=True,
 		):
 
@@ -78,6 +79,7 @@ class DayHistory(data.Dataset):
 		vfill = None
 		self.rawdata = []
 		self.trange = []
+		self.calendar = [] # contains time encoding based on week cycle and day (24hr) cycle
 		self.nancount = [[0,0] for _ in segments]
 		for ii, (day, gathered, vlists) in enumerate(all_avail):
 			t0 = s2d(vlists[0][0]['time'])
@@ -115,24 +117,31 @@ class DayHistory(data.Dataset):
 				nmean, nscale = norm
 				vs = (vs - nmean) / nscale
 				vmat[:, si] = vs[ind:ind+tsteps]
-			self.trange.append((t0, tf))
 
 			if self.clip_hours is not None:
 				vmat = vmat[self.clip_hours*6:]
+				t0 += timedelta(seconds=self.clip_hours*60*60)
+			self.trange.append((t0, tf))
 			self.rawdata.append(vmat)
 			for si in range(vmat.shape[1]):
 				segvs = vmat[:, si]
 				self.nancount[si][0] += np.isnan(segvs).sum()
 				self.nancount[si][1] += len(segvs)
+
+			midnight = t0.replace(hour=0, minute=0, second=0, microsecond=0)
+			seconds_since = (t0 - midnight).total_seconds()
+			times = []
+			for step_i in range(vmat.shape[0]):
+			    seconds_enc = (seconds_since + step_i * 60 * 10) / (24 * 60 * 60)
+			    time_encoding = t0.weekday() / 6 + seconds_enc * 0.1
+			    times.append(time_encoding)
+			self.calendar.append(np.array(times))
 		self.data = self.rawdata
 
 		tsplit = int(len(self.data) * split)
 		self.data = self.data[:tsplit] if mode == 'train' else self.data[tsplit:]
 		self.trange = self.trange[:tsplit] if mode == 'train' else self.trange[tsplit:]
-
-		# if lag is not None:
-		# 	self.raw_data = self.data
-		# 	self.data, nComplete, nTotal = self.chunks(self.data)
+		self.calendar = self.calendar[:tsplit] if mode == 'train' else self.calendar[tsplit:]
 
 		if shuffle:
 			npshuff(self.data)

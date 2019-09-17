@@ -114,7 +114,7 @@ def format_batch(inds, data, squeeze=True):
         labels.append(Y)
         lmasks.append(mask)
 
-    lmasks = torch.ByteTensor(np.array(lmasks)).squeeze(0)
+    lmasks = torch.ByteTensor(np.array(lmasks)).type(torch.bool).cuda().squeeze(0)
     batch, labels = [n2t(ls).squeeze(0) for ls in [batch, labels]]
 
     return batch, labels, lmasks
@@ -123,7 +123,10 @@ inds = trainable_inds(dset.data)
 eval_inds = trainable_inds(valset.data)
 
 print('Pre-evaluate:')
-evf = lambda: evaluate_v2(eval_inds, valset, gcn, loss_fcn, format_batch)
+evf = lambda: evaluate_v2(eval_inds, valset, gcn,
+    lambda preds, label, mask:
+        loss_fcn(preds[mask], label[mask]),
+    format_batch)
 best_eval = evf()
 
 print('Train:')

@@ -1,7 +1,7 @@
 
 
 import os, sys
-import dgl
+#import dgl
 sys.path.append('.')
 
 from glob import glob
@@ -53,6 +53,7 @@ from models.temporal.RNN import *
 model = RNN(hidden_size=256, steps=len(segs)).to(device)
 model.device = device
 criterion, opt, sch = model.params(lr=0.001)
+
 
 # Train
 n2t = lambda arr: torch.from_numpy(np.array(arr)).cuda().float()

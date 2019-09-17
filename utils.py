@@ -6,6 +6,7 @@ import numpy as np
 from configs import *
 from scipy.ndimage import gaussian_filter as blur
 
+import random
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -13,6 +14,97 @@ import numpy as np
 from scipy.stats import pearsonr as pc
 
 segkey = lambda s1, s2: '%s-%s' % (s1, s2)
+
+def mxgraph(segs, adjlist):
+	import dgl
+
+	g = dgl.DGLGraph()
+	g.add_nodes(len(segs))
+	source_list  = []
+	sink_list = []
+	iindex = { seg:ind for ind, seg in enumerate(segs) }
+	for source, ls in adjlist.items():
+		# self-edges
+		source_list.append(iindex[source])
+		sink_list.append(iindex[source])
+
+		for sink in ls:
+			source_list.append(iindex[source])
+			sink_list.append(iindex[sink])
+			# TWOWAY
+			source_list.append(iindex[sink])
+			sink_list.append(iindex[source])
+	g.add_edges(source_list, sink_list)
+
+	n_edges = g.number_of_edges()
+
+	# normalization
+	degs = g.in_degrees().float()
+	norm = torch.pow(degs, -0.5)
+	norm[torch.isinf(norm)] = 0
+	# norm = norm.cuda()
+	g.ndata['norm'] = norm.unsqueeze(1)
+	return g
+
+def gridplot(times, data, predictions, history=None, size=(14, 3)):
+	import matplotlib.pyplot as plt
+
+	image = []
+	for ii, ((t0, tf), day, preds) in enumerate(zip(times, data, predictions)):
+		timeline = []
+		# offset, preds = predictions[0]
+		midnight = t0.replace(hour=0, minute=0, second=0, microsecond=0)
+		seconds_since = (t0 - midnight).total_seconds()
+		offset = int(seconds_since // 60 // 10)
+		for ti in range(24 * 6):
+			if ti >= offset + history and ti < offset + len(day) - 1:
+				dind = ti - offset
+				pind = ti - history - offset
+				assert pind >= 0
+				assert dind >= 0
+				loss = [np.abs(ytrue - yhat) for ytrue, yhat in zip(day[dind], preds[pind])]
+				timeline.append(loss)
+			else:
+				timeline.append(np.zeros((preds.shape[1])))
+
+		timeline = np.array(timeline)
+		image.append(np.array(timeline).T)
+
+	image = np.array(image)
+	total_loss = np.sqrt(np.mean(image[~np.isnan(image)]**2))
+	image[np.isnan(image)] = 0
+
+	collapsed = np.mean(image, axis=0)
+	byrow = np.mean(collapsed, axis=1, keepdims=True)
+	flattened = np.mean(collapsed, axis=0,keepdims=True)
+	tmin = np.argmax(flattened[0]!=0)
+	tmax = len(flattened[0]) - np.argmax(flattened[0][::-1]!=0)
+	# print(tmin, tmax)
+	# image = np.vstack(image)
+	collapsed = collapsed[:, tmin:tmax]
+
+	plt.figure(figsize=size)
+	# gs = gridspec.GridSpec(1, 2, width_ratios=[10, 1]) 
+
+	plt.title('Loss: %.4f' % total_loss)
+	plt.imshow(collapsed, vmin=0, vmax=1)
+	plt.tight_layout()
+	plt.show()
+	plt.close()
+	return collapsed
+
+def gridcompare(ga, gb, size=(14, 3)):
+	import matplotlib.pyplot as plt
+
+	diff = ga - gb
+	# diff[diff > 0] = 1
+	diff[diff < 0] = 0
+	diff = np.abs(diff)
+	plt.figure(figsize=size)
+	plt.imshow(diff, vmin=0, vmax=1)
+	plt.tight_layout()
+	plt.show()
+	plt.close()
 
 def get_hist(sk):
 	spath = '%s/%s/**/%s.csv' % (DPATH, SPEEDS, sk)
@@ -103,7 +195,7 @@ def evaluate_v2(eval_inds, valset, mdl, metric, format_batch, post=None, run=Non
 			continue
 		total_count += 1
 		with torch.no_grad():
-			batch, labels, lmasks = format_batch([(di, hi)], valset.data)
+			batch, labels, lmasks = format_batch([(di, hi)], valset)
 			if post:
 				batch, labels, lmasks = post(batch, labels, lmasks)
 #             if run:
